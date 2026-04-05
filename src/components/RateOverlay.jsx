@@ -33,14 +33,14 @@ export default function RateOverlay({ rateData, asset, yieldIndex, color }) {
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.035)" />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 8, fill: "#3f4e5f", fontFamily: mono }}
+              tick={{ fontSize: 10, fill: "#6b7a8d", fontFamily: mono }}
               stroke="rgba(255,255,255,0.05)"
               angle={-35}
               textAnchor="end"
               height={58}
             />
             <YAxis
-              tick={{ fontSize: 9, fill: "#3f4e5f", fontFamily: mono }}
+              tick={{ fontSize: 10, fill: "#6b7a8d", fontFamily: mono }}
               tickFormatter={(v) => `${v.toFixed(1)}%`}
               stroke="rgba(255,255,255,0.05)"
             />
@@ -53,7 +53,7 @@ export default function RateOverlay({ rateData, asset, yieldIndex, color }) {
               label={{
                 value: `Index: ${fmtPct(yieldIndex)}`,
                 fill: color,
-                fontSize: 9,
+                fontSize: 10,
                 fontFamily: mono,
                 position: "right",
               }}
@@ -72,7 +72,7 @@ export default function RateOverlay({ rateData, asset, yieldIndex, color }) {
 
       <div
         style={{
-          fontSize: 9,
+          fontSize: 10,
           color: "#2d3a4a",
           textAlign: "center",
           marginTop: 3,

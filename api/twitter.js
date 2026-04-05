@@ -44,7 +44,7 @@ export default async function handler(req, res) {
   // X API query max is 512 chars — if too long, drop asset keywords
   const finalQuery = query.length <= 512
     ? query
-    : `(${FROM_CLAUSE}) ${YIELD_KEYWORDS} -is:retweet lang:en`;
+    : `(${FROM_CLAUSE}) (yield OR APY OR APR OR staking OR lending OR TVL) -is:retweet lang:en`;
 
   const params = new URLSearchParams({
     query: finalQuery,

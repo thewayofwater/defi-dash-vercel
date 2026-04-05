@@ -13,19 +13,19 @@ const truncCell = {
 const tableBase = {
   width: "100%",
   borderCollapse: "collapse",
-  fontSize: 9.5,
+  fontSize: 13,
   fontFamily: mono,
   tableLayout: "fixed",
 };
 
-const thStyle = { textAlign: "left", padding: "4px 6px", color: "#3f4e5f", fontWeight: 500 };
+const thStyle = { textAlign: "left", padding: "8px 6px", color: "#6b7a8d", fontWeight: 500, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 };
 
 function MoverTable({ pools, label, labelColor }) {
   return (
     <div>
       <div
         style={{
-          fontSize: 9.5,
+          fontSize: 10,
           color: labelColor,
           marginBottom: 5,
           fontFamily: mono,
@@ -61,24 +61,27 @@ function MoverTable({ pools, label, labelColor }) {
             return (
               <tr
                 key={p.pool || i}
-                style={{ background: i % 2 === 0 ? "rgba(255,255,255,0.012)" : "transparent" }}
+                onClick={() => window.open(`https://defillama.com/yields/pool/${p.pool}`, "_blank")}
+                style={{ background: i % 2 === 0 ? "rgba(255,255,255,0.012)" : "transparent", cursor: "pointer" }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "rgba(255,255,255,0.012)" : "transparent"}
               >
-                <td style={{ ...truncCell, padding: "5px 6px", color: "#6b7a8d" }} title={p.project}>
+                <td style={{ ...truncCell, padding: "8px 6px", color: "#94a3b8" }} title={p.project}>
                   {p.project}
                 </td>
-                <td style={{ ...truncCell, padding: "5px 6px", color: "#a0aec0" }} title={p.symbol}>
+                <td style={{ ...truncCell, padding: "8px 6px", color: "#cbd5e1" }} title={p.symbol}>
                   {p.symbol}
                 </td>
-                <td style={{ ...truncCell, padding: "5px 6px", color: "#3f4e5f" }}>
+                <td style={{ ...truncCell, padding: "8px 6px", color: "#94a3b8" }}>
                   {chainName(p.chain)}
                 </td>
-                <td style={{ padding: "5px 6px", color: "#a0aec0" }}>
+                <td style={{ padding: "8px 6px", color: "#cbd5e1" }}>
                   {fmtPct(p.apy)}
                 </td>
-                <td style={{ padding: "5px 6px", color: "#3f4e5f" }}>
+                <td style={{ padding: "8px 6px", color: "#94a3b8" }}>
                   {fmt(p.tvlUsd)}
                 </td>
-                <td style={{ padding: "5px 6px", color: isUp ? "#34d399" : "#f87171", fontWeight: 500 }}>
+                <td style={{ padding: "8px 6px", color: isUp ? "#34d399" : "#f87171", fontWeight: 500 }}>
                   {isUp ? "+" : ""}{change.toFixed(1)}%
                 </td>
               </tr>
@@ -87,7 +90,7 @@ function MoverTable({ pools, label, labelColor }) {
         </tbody>
       </table>
       {!pools.length && (
-        <div style={{ fontSize: 10, color: "#3f4e5f", fontFamily: mono, padding: 8 }}>
+        <div style={{ fontSize: 12, color: "#4a5568", fontFamily: mono, padding: 8 }}>
           No significant movers
         </div>
       )}
@@ -100,7 +103,7 @@ function TopApyTable({ pools }) {
     <div>
       <div
         style={{
-          fontSize: 9.5,
+          fontSize: 10,
           color: "#60a5fa",
           marginBottom: 5,
           fontFamily: mono,
@@ -112,12 +115,11 @@ function TopApyTable({ pools }) {
       </div>
       <table style={tableBase}>
         <colgroup>
-          <col style={{ width: "20%" }} />
-          <col style={{ width: "18%" }} />
-          <col style={{ width: "14%" }} />
-          <col style={{ width: "12%" }} />
-          <col style={{ width: "12%" }} />
           <col style={{ width: "24%" }} />
+          <col style={{ width: "24%" }} />
+          <col style={{ width: "18%" }} />
+          <col style={{ width: "16%" }} />
+          <col style={{ width: "18%" }} />
         </colgroup>
         <thead>
           <tr>
@@ -126,46 +128,38 @@ function TopApyTable({ pools }) {
             <th style={thStyle}>Chain</th>
             <th style={thStyle}>APY</th>
             <th style={thStyle}>TVL</th>
-            <th style={thStyle}>Link</th>
           </tr>
         </thead>
         <tbody>
           {pools.map((p, i) => (
             <tr
               key={p.pool || i}
-              style={{ background: i % 2 === 0 ? "rgba(255,255,255,0.012)" : "transparent" }}
+              onClick={() => window.open(`https://defillama.com/yields/pool/${p.pool}`, "_blank")}
+              style={{ background: i % 2 === 0 ? "rgba(255,255,255,0.012)" : "transparent", cursor: "pointer" }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "rgba(255,255,255,0.012)" : "transparent"}
             >
-              <td style={{ ...truncCell, padding: "5px 6px", color: "#6b7a8d" }} title={p.project}>
+              <td style={{ ...truncCell, padding: "8px 6px", color: "#94a3b8" }} title={p.project}>
                 {p.project}
               </td>
-              <td style={{ ...truncCell, padding: "5px 6px", color: "#a0aec0" }} title={p.symbol}>
+              <td style={{ ...truncCell, padding: "8px 6px", color: "#cbd5e1" }} title={p.symbol}>
                 {p.symbol}
               </td>
-              <td style={{ ...truncCell, padding: "5px 6px", color: "#3f4e5f" }}>
+              <td style={{ ...truncCell, padding: "8px 6px", color: "#94a3b8" }}>
                 {chainName(p.chain)}
               </td>
-              <td style={{ padding: "5px 6px", color: "#60a5fa", fontWeight: 500 }}>
+              <td style={{ padding: "8px 6px", color: "#60a5fa", fontWeight: 500 }}>
                 {fmtPct(p.apy)}
               </td>
-              <td style={{ padding: "5px 6px", color: "#3f4e5f" }}>
+              <td style={{ padding: "8px 6px", color: "#94a3b8" }}>
                 {fmt(p.tvlUsd)}
-              </td>
-              <td style={{ ...truncCell, padding: "5px 6px" }}>
-                <a
-                  href={`https://defillama.com/yields/pool/${p.pool}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: "#4a90a4", textDecoration: "none", fontSize: 8.5 }}
-                >
-                  defillama.com ↗
-                </a>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       {!pools.length && (
-        <div style={{ fontSize: 10, color: "#3f4e5f", fontFamily: mono, padding: 8 }}>
+        <div style={{ fontSize: 12, color: "#4a5568", fontFamily: mono, padding: 8 }}>
           No pools found
         </div>
       )}
@@ -194,8 +188,8 @@ export default function TrendingYields({ trending, asset }) {
       <div style={{ position: "relative", marginTop: 8, display: "inline-block" }}>
         <div
           style={{
-            fontSize: 8.5,
-            color: "#3f4e5f",
+            fontSize: 10,
+            color: "#4a5568",
             fontFamily: mono,
             fontStyle: "italic",
             cursor: "pointer",
@@ -215,7 +209,7 @@ export default function TrendingYields({ trending, asset }) {
               border: "1px solid #2a3a4a",
               borderRadius: 6,
               padding: "8px 12px",
-              fontSize: 9,
+              fontSize: 10,
               color: "#e2e8f0",
               fontFamily: mono,
               fontStyle: "normal",

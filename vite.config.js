@@ -107,6 +107,34 @@ export default defineConfig(({ mode }) => {
           });
         },
       },
+      {
+        name: "morpho-proxy",
+        configureServer(server) {
+          server.middlewares.use("/api/morpho", async (req, res) => {
+            try {
+              const morphoHandler = await import("./api/morpho.js");
+              const fakeRes = {
+                statusCode: 200,
+                headers: {},
+                setHeader(k, v) { this.headers[k] = v; },
+                status(code) { this.statusCode = code; return this; },
+                json(data) {
+                  res.statusCode = this.statusCode;
+                  Object.entries(this.headers).forEach(([k, v]) => res.setHeader(k, v));
+                  res.setHeader("Content-Type", "application/json");
+                  res.end(JSON.stringify(data));
+                },
+              };
+              await morphoHandler.default(req, fakeRes);
+            } catch (err) {
+              console.error("Morpho proxy error:", err);
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+        },
+      },
     ],
   };
 });

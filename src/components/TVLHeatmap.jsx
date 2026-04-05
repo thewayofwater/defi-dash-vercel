@@ -140,7 +140,7 @@ export default function TVLHeatmap({ pools, asset }) {
             onClick={() => setMode(key)}
             style={{
               padding: "4px 12px",
-              fontSize: 9,
+              fontSize: 10,
               fontFamily: mono,
               fontWeight: 500,
               letterSpacing: 0.5,
@@ -165,7 +165,7 @@ export default function TVLHeatmap({ pools, asset }) {
           style={{
             width: "100%",
             borderCollapse: "collapse",
-            fontSize: 10,
+            fontSize: 13,
             fontFamily: mono,
             tableLayout: "fixed",
           }}
@@ -182,10 +182,11 @@ export default function TVLHeatmap({ pools, asset }) {
               <th
                 style={{
                                     textAlign: "left",
-                  padding: "6px 10px",
-                  color: "#3f4e5f",
+                  padding: "8px 10px",
+                  color: "#6b7a8d",
                   borderBottom: "1px solid rgba(255,255,255,0.05)",
                   fontWeight: 500,
+                  fontSize: 10,
                 }}
               >
                 Chain
@@ -195,12 +196,12 @@ export default function TVLHeatmap({ pools, asset }) {
                   key={cat}
                   style={{
                                         textAlign: "right",
-                    padding: "6px 10px",
+                    padding: "8px 10px",
                     color: CATEGORY_COLORS[cat],
                     borderBottom: "1px solid rgba(255,255,255,0.05)",
                     fontWeight: 500,
                     opacity: 0.75,
-                    fontSize: 9,
+                    fontSize: 10,
                   }}
                 >
                   {CATEGORY_SHORT[cat] || cat}
@@ -209,11 +210,11 @@ export default function TVLHeatmap({ pools, asset }) {
               <th
                 style={{
                                     textAlign: "right",
-                  padding: "6px 10px",
+                  padding: "8px 10px",
                   color: "#e2e8f0",
                   borderBottom: "1px solid rgba(255,255,255,0.05)",
                   fontWeight: 600,
-                  fontSize: 9,
+                  fontSize: 10,
                 }}
               >
                 {isApy ? "Avg" : "Total"}
@@ -225,8 +226,8 @@ export default function TVLHeatmap({ pools, asset }) {
               <tr key={row.chain}>
                 <td
                   style={{
-                    padding: "6px 10px",
-                    color: "#a0aec0",
+                    padding: "8px 10px",
+                    color: "#cbd5e1",
                     borderBottom: "1px solid rgba(255,255,255,0.02)",
                     fontWeight: 500,
                     overflow: "hidden",
@@ -248,7 +249,7 @@ export default function TVLHeatmap({ pools, asset }) {
                       }}
                       style={{
                         textAlign: "right",
-                        padding: "6px 10px",
+                        padding: "8px 10px",
                         background: isSelected
                           ? "rgba(34, 211, 238, 0.25)"
                           : getColor(row[cat]),
@@ -265,7 +266,7 @@ export default function TVLHeatmap({ pools, asset }) {
                 <td
                   style={{
                     textAlign: "right",
-                    padding: "6px 10px",
+                    padding: "8px 10px",
                     borderBottom: "1px solid rgba(255,255,255,0.02)",
                     color: "#e2e8f0",
                     fontWeight: 600,
@@ -278,7 +279,7 @@ export default function TVLHeatmap({ pools, asset }) {
             <tr>
               <td
                 style={{
-                  padding: "6px 10px",
+                  padding: "8px 10px",
                   color: "#e2e8f0",
                   borderTop: "1px solid rgba(255,255,255,0.1)",
                   fontWeight: 600,
@@ -291,7 +292,7 @@ export default function TVLHeatmap({ pools, asset }) {
                   key={cat}
                   style={{
                     textAlign: "right",
-                    padding: "6px 10px",
+                    padding: "8px 10px",
                     borderTop: "1px solid rgba(255,255,255,0.1)",
                     color: CATEGORY_COLORS[cat],
                     fontWeight: 600,
@@ -303,7 +304,7 @@ export default function TVLHeatmap({ pools, asset }) {
               <td
                 style={{
                   textAlign: "right",
-                  padding: "6px 10px",
+                  padding: "8px 10px",
                   borderTop: "1px solid rgba(255,255,255,0.1)",
                   color: "#e2e8f0",
                   fontWeight: 700,
@@ -364,30 +365,34 @@ export default function TVLHeatmap({ pools, asset }) {
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                fontSize: 9.5,
+                fontSize: 13,
                 fontFamily: mono,
               }}
             >
               <thead>
                 <tr>
-                  <th style={{ textAlign: "left", padding: "4px 8px", color: "#3f4e5f", fontWeight: 500 }}>Protocol</th>
-                  <th style={{ textAlign: "left", padding: "4px 8px", color: "#3f4e5f", fontWeight: 500 }}>Symbol</th>
-                  <th style={{ textAlign: "right", padding: "4px 8px", color: "#3f4e5f", fontWeight: 500 }}>TVL</th>
-                  <th style={{ textAlign: "right", padding: "4px 8px", color: "#3f4e5f", fontWeight: 500 }}>APY</th>
+                  <th style={{ textAlign: "left", padding: "8px 8px", color: "#6b7a8d", fontWeight: 500, fontSize: 10 }}>Protocol</th>
+                  <th style={{ textAlign: "left", padding: "8px 8px", color: "#6b7a8d", fontWeight: 500, fontSize: 10 }}>Symbol</th>
+                  <th style={{ textAlign: "right", padding: "8px 8px", color: "#6b7a8d", fontWeight: 500, fontSize: 10 }}>TVL</th>
+                  <th style={{ textAlign: "right", padding: "8px 8px", color: "#6b7a8d", fontWeight: 500, fontSize: 10 }}>APY</th>
                 </tr>
               </thead>
               <tbody>
                 {drillPools.map((p, i) => (
                   <tr
                     key={p.pool || i}
+                    onClick={() => window.open(`https://defillama.com/yields/pool/${p.pool}`, "_blank")}
                     style={{
                       background: i % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent",
+                      cursor: "pointer",
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent"}
                   >
-                    <td style={{ padding: "4px 8px", color: "#a0aec0" }}>{p.project}</td>
-                    <td style={{ padding: "4px 8px", color: "#6b7a8d" }}>{p.symbol}</td>
-                    <td style={{ padding: "4px 8px", textAlign: "right", color: "#a0aec0" }}>{fmt(p.tvlUsd)}</td>
-                    <td style={{ padding: "4px 8px", textAlign: "right", color: "#22d3ee" }}>{fmtPct(p.apy)}</td>
+                    <td style={{ padding: "8px 8px", color: "#cbd5e1" }}>{p.project}</td>
+                    <td style={{ padding: "8px 8px", color: "#94a3b8" }}>{p.symbol}</td>
+                    <td style={{ padding: "8px 8px", textAlign: "right", color: "#cbd5e1" }}>{fmt(p.tvlUsd)}</td>
+                    <td style={{ padding: "8px 8px", textAlign: "right", color: "#22d3ee" }}>{fmtPct(p.apy)}</td>
                   </tr>
                 ))}
               </tbody>

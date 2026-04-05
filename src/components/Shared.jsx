@@ -18,7 +18,7 @@ export function StatCard({ label, value, sub, color, trend }) {
     >
       <div
         style={{
-          fontSize: 9.5,
+          fontSize: 10,
           color: "#5a6678",
           textTransform: "uppercase",
           letterSpacing: 1.3,
@@ -42,7 +42,7 @@ export function StatCard({ label, value, sub, color, trend }) {
       {sub && (
         <div
           style={{
-            fontSize: 10.5,
+            fontSize: 12,
             color:
               trend === "up"
                 ? "#34d399"
@@ -65,7 +65,7 @@ export function SectionHeader({ title, subtitle }) {
     <div style={{ marginBottom: 12 }}>
       <h2
         style={{
-          fontSize: 14.5,
+          fontSize: 16,
           fontWeight: 600,
           color: "#e2e8f0",
           margin: 0,
@@ -77,8 +77,8 @@ export function SectionHeader({ title, subtitle }) {
       {subtitle && (
         <div
           style={{
-            fontSize: 10.5,
-            color: "#3f4e5f",
+            fontSize: 12,
+            color: "#7a8a9e",
             marginTop: 2,
             fontFamily: mono,
           }}
@@ -112,7 +112,7 @@ export function LoadingSpinner({ message }) {
           animation: "spin 1s linear infinite",
         }}
       />
-      <div style={{ color: "#3f4e5f", fontSize: 10, fontFamily: mono }}>
+      <div style={{ color: "#4a5568", fontSize: 12, fontFamily: mono }}>
         {message || "Loading..."}
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -138,8 +138,8 @@ export function CategoryLegend() {
             display: "flex",
             alignItems: "center",
             gap: 5,
-            fontSize: 9.5,
-            color: "#6b7a8d",
+            fontSize: 10,
+            color: "#94a3b8",
             fontFamily: mono,
           }}
         >

@@ -20,7 +20,7 @@ function formatCount(n) {
 export default function TwitterFeed({ tweets, loading, error }) {
   if (loading) {
     return (
-      <div style={{ fontSize: 10, color: "#3f4e5f", fontFamily: mono, padding: 12 }}>
+      <div style={{ fontSize: 12, color: "#4a5568", fontFamily: mono, padding: 12 }}>
         Loading tweets...
       </div>
     );
@@ -28,7 +28,7 @@ export default function TwitterFeed({ tweets, loading, error }) {
 
   if (error) {
     return (
-      <div style={{ fontSize: 10, color: "#f87171", fontFamily: mono, padding: 12 }}>
+      <div style={{ fontSize: 12, color: "#f87171", fontFamily: mono, padding: 12 }}>
         {error}
       </div>
     );
@@ -36,7 +36,7 @@ export default function TwitterFeed({ tweets, loading, error }) {
 
   if (!tweets || !tweets.length) {
     return (
-      <div style={{ fontSize: 10, color: "#3f4e5f", fontFamily: mono, padding: 12 }}>
+      <div style={{ fontSize: 12, color: "#4a5568", fontFamily: mono, padding: 12 }}>
         No recent tweets found
       </div>
     );
@@ -61,10 +61,10 @@ export default function TwitterFeed({ tweets, loading, error }) {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 10, fontWeight: 600, color: "#a0aec0", fontFamily: mono }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#cbd5e1", fontFamily: mono }}>
                 {t.author.name}
               </span>
-              <span style={{ fontSize: 9, color: "#3f4e5f", fontFamily: mono }}>
+              <span style={{ fontSize: 10, color: "#4a5568", fontFamily: mono }}>
                 @{t.author.username}
               </span>
               {t.author.followers >= 1000 && (
@@ -80,13 +80,13 @@ export default function TwitterFeed({ tweets, loading, error }) {
                 </span>
               )}
             </div>
-            <span style={{ fontSize: 8.5, color: "#2d3a4a", fontFamily: mono }}>
+            <span style={{ fontSize: 10, color: "#2d3a4a", fontFamily: mono }}>
               {timeAgo(t.createdAt)}
             </span>
           </div>
           <div style={{
-            fontSize: 10,
-            color: "#6b7a8d",
+            fontSize: 12,
+            color: "#94a3b8",
             lineHeight: 1.5,
             fontFamily: mono,
             overflow: "hidden",
@@ -97,13 +97,13 @@ export default function TwitterFeed({ tweets, loading, error }) {
             {t.text}
           </div>
           <div style={{ display: "flex", gap: 14, marginTop: 6 }}>
-            <span style={{ fontSize: 8.5, color: "#2d3a4a", fontFamily: mono }}>
+            <span style={{ fontSize: 10, color: "#2d3a4a", fontFamily: mono }}>
               {t.metrics?.like_count || 0} likes
             </span>
-            <span style={{ fontSize: 8.5, color: "#2d3a4a", fontFamily: mono }}>
+            <span style={{ fontSize: 10, color: "#2d3a4a", fontFamily: mono }}>
               {t.metrics?.retweet_count || 0} rt
             </span>
-            <span style={{ fontSize: 8.5, color: "#2d3a4a", fontFamily: mono }}>
+            <span style={{ fontSize: 10, color: "#2d3a4a", fontFamily: mono }}>
               {t.metrics?.reply_count || 0} replies
             </span>
           </div>

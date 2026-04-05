@@ -25,8 +25,8 @@ export default function AssetYieldBreakdown({ stats, asset, yieldIndex, color })
         <div>
           <div
             style={{
-              fontSize: 9.5,
-              color: "#3f4e5f",
+              fontSize: 10,
+              color: "#4a5568",
               marginBottom: 5,
               fontFamily: mono,
               textTransform: "uppercase",
@@ -40,9 +40,9 @@ export default function AssetYieldBreakdown({ stats, asset, yieldIndex, color })
               display: "flex",
               justifyContent: "space-between",
               padding: "4px 7px",
-              fontSize: 9,
+              fontSize: 10,
               fontFamily: mono,
-              color: "#3f4e5f",
+              color: "#6b7a8d",
               marginBottom: 2,
             }}
           >
@@ -61,13 +61,13 @@ export default function AssetYieldBreakdown({ stats, asset, yieldIndex, color })
                 padding: "4px 7px",
                 background: i % 2 === 0 ? "rgba(255,255,255,0.012)" : "transparent",
                 borderRadius: 2,
-                fontSize: 10,
+                fontSize: 13,
                 fontFamily: mono,
               }}
             >
-              <span style={{ color: "#a0aec0" }}>{p.name}</span>
+              <span style={{ color: "#cbd5e1" }}>{p.name}</span>
               <div style={{ display: "flex", gap: 12 }}>
-                <span style={{ color: "#3f4e5f", minWidth: 60, textAlign: "right" }}>
+                <span style={{ color: "#94a3b8", minWidth: 60, textAlign: "right" }}>
                   {fmt(p.tvl, 0)}
                 </span>
                 <span style={{ color, minWidth: 45, textAlign: "right" }}>
@@ -82,8 +82,8 @@ export default function AssetYieldBreakdown({ stats, asset, yieldIndex, color })
         <div>
           <div
             style={{
-              fontSize: 9.5,
-              color: "#3f4e5f",
+              fontSize: 10,
+              color: "#4a5568",
               marginBottom: 5,
               fontFamily: mono,
               textTransform: "uppercase",
@@ -99,14 +99,14 @@ export default function AssetYieldBreakdown({ stats, asset, yieldIndex, color })
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.035)" horizontal={false} />
                 <XAxis
                   type="number"
-                  tick={{ fontSize: 9, fill: "#3f4e5f", fontFamily: mono }}
+                  tick={{ fontSize: 10, fill: "#6b7a8d", fontFamily: mono }}
                   tickFormatter={(v) => `${v.toFixed(1)}%`}
                   stroke="rgba(255,255,255,0.05)"
                 />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  tick={{ fontSize: 9, fill: "#6b7a8d", fontFamily: mono }}
+                  tick={{ fontSize: 10, fill: "#94a3b8", fontFamily: mono }}
                   stroke="rgba(255,255,255,0.05)"
                   width={48}
                 />

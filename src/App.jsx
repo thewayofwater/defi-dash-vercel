@@ -115,7 +115,7 @@ export default function App() {
           <div>
             <h1
               style={{
-                fontSize: 19,
+                fontSize: 22,
                 fontWeight: 700,
                 margin: 0,
                 color: "#f1f5f9",
@@ -127,7 +127,7 @@ export default function App() {
                 style={{
                   color: "#22d3ee",
                   marginLeft: 8,
-                  fontSize: 9.5,
+                  fontSize: 10,
                   fontWeight: 500,
                   fontFamily: mono,
                   verticalAlign: "middle",
@@ -142,7 +142,7 @@ export default function App() {
             </h1>
             <div
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 color: "#2d3a4a",
                 marginTop: 2,
                 fontFamily: mono,
@@ -161,7 +161,7 @@ export default function App() {
                 border: refreshing ? "1px solid rgba(34,211,238,0.2)" : "1px solid rgba(255,255,255,0.08)",
                 borderRadius: 4,
                 padding: "5px 10px",
-                fontSize: 8.5,
+                fontSize: 10,
                 color: refreshing ? "#22d3ee" : "#4a5568",
                 fontFamily: mono,
                 letterSpacing: 0.5,
@@ -177,7 +177,7 @@ export default function App() {
                 border: "1px solid rgba(34,211,238,0.12)",
                 borderRadius: 4,
                 padding: "5px 10px",
-                fontSize: 8.5,
+                fontSize: 10,
                 color: "#22d3ee",
                 fontFamily: mono,
                 letterSpacing: 0.5,
@@ -215,9 +215,9 @@ export default function App() {
               >
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 600,
-                    color: isSelected ? assetColor : "#6b7a8d",
+                    color: isSelected ? assetColor : "#94a3b8",
                     fontFamily: mono,
                   }}
                 >
@@ -225,7 +225,7 @@ export default function App() {
                 </div>
                 <div
                   style={{
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: 700,
                     color: isSelected ? "#e2e8f0" : "#4a5568",
                     fontFamily: mono,
@@ -237,7 +237,7 @@ export default function App() {
                 </div>
                 <div
                   style={{
-                    fontSize: 8.5,
+                    fontSize: 10,
                     color: isSelected ? "#3f4e5f" : "#2d3a4a",
                     fontFamily: mono,
                     marginTop: 1,
@@ -263,7 +263,7 @@ export default function App() {
         <ModuleCard>
           <SectionHeader
             title={`${selectedAsset} Yield Chatter`}
-            subtitle="Recent tweets about yield opportunities — sorted by engagement"
+            subtitle="Recent tweets about yield opportunities"
           />
           <TwitterFeed tweets={tweets} loading={tweetsLoading} error={tweetsError} />
         </ModuleCard>
@@ -301,7 +301,7 @@ export default function App() {
           style={{
             textAlign: "center",
             padding: "12px 0",
-            fontSize: 8.5,
+            fontSize: 10,
             color: "#1e2838",
             fontFamily: mono,
             borderTop: "1px solid rgba(255,255,255,0.025)",
