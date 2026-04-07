@@ -155,7 +155,7 @@ export default async function handler(req, res) {
   // If ?chart=<poolId>, return historical data for that pool
   if (chartPool) {
     try {
-      const resp = await fetch(`${DEFILLAMA_CHART}/${chartPool}`);
+      const resp = await fetch(`${DEFILLAMA_CHART}/${chartPool}`, { signal: AbortSignal.timeout(10000) });
       if (!resp.ok) throw new Error(`DeFiLlama chart API ${resp.status}`);
       const data = await resp.json();
       const points = (data.data || []).slice(-365).map((d) => ({
@@ -172,8 +172,8 @@ export default async function handler(req, res) {
   // Otherwise return all pools for comparison
   try {
     const [poolsResp, protocolsResp] = await Promise.all([
-      fetch(DEFILLAMA_POOLS),
-      fetch(DEFILLAMA_PROTOCOLS),
+      fetch(DEFILLAMA_POOLS, { signal: AbortSignal.timeout(10000) }),
+      fetch(DEFILLAMA_PROTOCOLS, { signal: AbortSignal.timeout(10000) }),
     ]);
     if (!poolsResp.ok) throw new Error(`DeFiLlama pools API ${poolsResp.status}`);
     const data = await poolsResp.json();

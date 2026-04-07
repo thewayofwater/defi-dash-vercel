@@ -20,35 +20,34 @@ function chainName(id) {
 }
 
 async function fetchAllMarkets() {
-  const limit = 100;
-  let skip = 0;
-  let allMarkets = [];
-  let total = Infinity;
+  // First request to get total count
+  const firstResp = await fetch(`${PENDLE_MARKETS_API}?limit=100&skip=0`, { signal: AbortSignal.timeout(10000) });
+  if (!firstResp.ok) throw new Error(`Pendle Markets API ${firstResp.status}`);
+  const firstData = await firstResp.json();
+  const total = firstData.total || 0;
+  let allMarkets = firstData.results || [];
 
-  while (skip < total) {
-    const url = `${PENDLE_MARKETS_API}?limit=${limit}&skip=${skip}`;
-    const resp = await fetch(url);
-    if (!resp.ok) {
-      const body = await resp.text();
-      throw new Error(`Pendle Markets API ${resp.status}: ${body}`);
+  if (total > 100) {
+    // Fetch remaining pages in parallel
+    const pages = [];
+    for (let skip = 100; skip < total; skip += 100) {
+      pages.push(
+        fetch(`${PENDLE_MARKETS_API}?limit=100&skip=${skip}`, { signal: AbortSignal.timeout(10000) })
+          .then((r) => r.ok ? r.json() : { results: [] })
+          .then((d) => d.results || [])
+          .catch(() => [])
+      );
     }
-    const data = await resp.json();
-    total = data.total || 0;
-    const results = data.results || [];
-    allMarkets = allMarkets.concat(results);
-    skip += limit;
-    if (results.length === 0) break;
+    const results = await Promise.all(pages);
+    allMarkets = allMarkets.concat(...results);
   }
 
   return allMarkets;
 }
 
 async function fetchSPendleData() {
-  const resp = await fetch(PENDLE_SPENDLE_API);
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`Pendle sPENDLE API ${resp.status}: ${body}`);
-  }
+  const resp = await fetch(PENDLE_SPENDLE_API, { signal: AbortSignal.timeout(10000) });
+  if (!resp.ok) throw new Error(`Pendle sPENDLE API ${resp.status}`);
   return resp.json();
 }
 
@@ -195,7 +194,7 @@ function parseSPendle(data) {
 }
 
 async function fetchTvlHistory() {
-  const resp = await fetch("https://api.llama.fi/protocol/pendle");
+  const resp = await fetch("https://api.llama.fi/protocol/pendle", { signal: AbortSignal.timeout(10000) });
   if (!resp.ok) throw new Error(`DeFiLlama API ${resp.status}`);
   const data = await resp.json();
   const tvl = data.tvl || [];

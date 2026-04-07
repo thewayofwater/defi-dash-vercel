@@ -265,7 +265,7 @@ export default function App() {
             subtitle={`Highest yielding pools by APY`}
           />
           {refreshing ? <ChartShimmer height={180} /> : (
-            <div key={refreshKey}><TrendingYields trending={trendingPools} asset={selectedAsset} /></div>
+            <div key={refreshKey}><TrendingYields pools={assetPools} asset={selectedAsset} /></div>
           )}
         </ModuleCard>
 

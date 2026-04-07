@@ -28,40 +28,47 @@ async function fetchGql(query) {
 
 // Aave v4 data from their official GraphQL API
 async function fetchV4Data() {
-  // Get hubs (markets)
-  const hubsRes = await fetchGql(`{
-    hubs(request: { query: { chainIds: [1] }, orderBy: { totalSupplied: DESC } }) {
-      id name address
-      chain { name chainId }
-      summary {
-        totalBorrowed { current { value symbol } change { value } }
-        totalSupplied { current { value symbol } change { value } }
-        totalBorrowCap { value symbol }
-        totalSupplyCap { value symbol }
-        utilizationRate { value }
+  // Phase 1: Fetch hubs, reserves, and history in parallel
+  const [hubsRes, reservesRes, historyRes] = await Promise.all([
+    fetchGql(`{
+      hubs(request: { query: { chainIds: [1] }, orderBy: { totalSupplied: DESC } }) {
+        id name address
+        chain { name chainId }
+        summary {
+          totalBorrowed { current { value symbol } change { value } }
+          totalSupplied { current { value symbol } change { value } }
+          totalBorrowCap { value symbol }
+          totalSupplyCap { value symbol }
+          utilizationRate { value }
+        }
       }
-    }
-  }`);
+    }`),
+    fetchGql(`{
+      reserves(request: { query: { chainIds: [1] } }) {
+        id
+        chain { chainId }
+        spoke { id name }
+        asset { underlying { address info { symbol name } } }
+        summary {
+          supplied { exchange { value symbol } }
+          borrowed { exchange { value symbol } }
+          supplyApy { value }
+          borrowApy { value }
+        }
+      }
+    }`).catch(() => ({ data: { reserves: [] } })),
+    fetchGql(`{
+      protocolHistory(request: { currency: USD, window: LAST_MONTH }) {
+        date
+        deposits { value symbol }
+        borrows { value symbol }
+      }
+    }`).catch(() => ({ data: { protocolHistory: [] } })),
+  ]);
 
   const hubs = hubsRes.data?.hubs || [];
 
-  // Get all reserves with spoke (market instance) info
-  const reservesRes = await fetchGql(`{
-    reserves(request: { query: { chainIds: [1] } }) {
-      id
-      chain { chainId }
-      spoke { id name }
-      asset { underlying { address info { symbol name } } }
-      summary {
-        supplied { exchange { value symbol } }
-        borrowed { exchange { value symbol } }
-        supplyApy { value }
-        borrowApy { value }
-      }
-    }
-  }`).catch(() => ({ data: { reserves: [] } }));
-
-  // Build hub lookup by spoke ID (parallel)
+  // Phase 2: Build hub lookup by spoke ID (parallel per hub)
   const spokeToHub = {};
   await Promise.all(hubs.map(async (hub) => {
     const spokesRes = await fetchGql(`{
@@ -71,15 +78,6 @@ async function fetchV4Data() {
       spokeToHub[spoke.id] = { hubId: hub.id, hubName: hub.name };
     }
   }));
-
-  // Get protocol history
-  const historyRes = await fetchGql(`{
-    protocolHistory(request: { currency: USD, window: LAST_MONTH }) {
-      date
-      deposits { value symbol }
-      borrows { value symbol }
-    }
-  }`).catch(() => ({ data: { protocolHistory: [] } }));
 
   // Parse hubs
   const parsedHubs = hubs.map((h) => ({

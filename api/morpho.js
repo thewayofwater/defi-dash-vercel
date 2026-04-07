@@ -131,6 +131,7 @@ async function fetchGraphQL(query) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
+    signal: AbortSignal.timeout(10000),
   });
   if (!resp.ok) {
     const body = await resp.text();

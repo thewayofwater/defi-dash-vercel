@@ -1,15 +1,9 @@
 const GQL_URL = "https://api.maple.finance/v2/graphql";
-const ETH_RPC = "https://eth.llamarpc.com";
+const ETH_RPC = "https://ethereum-rpc.publicnode.com";
 
 const POOLS = {
   usdc: { name: "Syrup USDC", id: "0x80ac24aa929eaf5013f6436cda2a7ba190f5cc0b" },
   usdt: { name: "Syrup USDT", id: "0x356b8d89c1e1239cbbb9de4815c39a1474d5ba7d" },
-};
-
-const STRATEGY_CONTRACTS = {
-  "sky-usdc":  "0x859c9980931fa0a63765fd8ef2e29918af5b038c",
-  "aave-usdt": "0x2b817b822b0ddd4597a92dbed1bd0a6796ca37e0",
-  "sky-hy":    "0xe3ee1b26af5396cec45c8c3b4c4fd5136a2455cc",
 };
 
 const TOKEN_DECIMALS = {
@@ -18,6 +12,38 @@ const TOKEN_DECIMALS = {
   USDC: 6, USDT: 6, PYUSD: 6, sUSDS: 18,
   PT_sUSDE: 18, PT_USDE: 18, LP_USR: 18, USR: 18,
 };
+
+// CoinGecko ID mapping for collateral price lookups (via DeFiLlama coins API)
+const COINGECKO_IDS = {
+  BTC: "bitcoin", LBTC: "lombard-staked-btc", XRP: "ripple",
+  HYPE: "hyperliquid", ETH: "ethereum", weETH: "wrapped-eeth",
+  SOL: "solana", jitoSOL: "jito-staked-sol", tETH: "threshold-ethereum",
+  USDC: "usd-coin", USDT: "tether", PYUSD: "paypal-usd",
+  sUSDS: "sdai", USTB: "superstate-short-duration-us-government-securities-fund-ustb",
+};
+
+async function fetchCollateralPrices() {
+  const coins = [...new Set(Object.values(COINGECKO_IDS))]
+    .map((id) => `coingecko:${id}`)
+    .join(",");
+  try {
+    const resp = await fetch(
+      `https://coins.llama.fi/prices/current/${coins}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!resp.ok) return {};
+    const data = await resp.json();
+    // Map symbol → USD price
+    const prices = {};
+    for (const [sym, geckoId] of Object.entries(COINGECKO_IDS)) {
+      const entry = data.coins?.[`coingecko:${geckoId}`];
+      if (entry?.price) prices[sym] = entry.price;
+    }
+    return prices;
+  } catch {
+    return {};
+  }
+}
 
 // Maple APY values have 28 implied decimals (ray format)
 function parseRayToPercent(rawStr) {
@@ -34,6 +60,42 @@ function parseCollateralAmount(rawAmount, assetSymbol) {
   const sym = assetSymbol?.replace(/[\s-]/g, "") || "";
   const decimals = TOKEN_DECIMALS[sym] ?? 18;
   return Number(rawAmount) / 10 ** decimals;
+}
+
+async function fetchAssetVolatility() {
+  // Only fetch volatility for collateral assets (not stablecoins)
+  const VOL_ASSETS = { BTC: "bitcoin", LBTC: "lombard-staked-btc", XRP: "ripple", HYPE: "hyperliquid" };
+  const coins = Object.values(VOL_ASSETS).map((id) => `coingecko:${id}`).join(",");
+  const now = Math.floor(Date.now() / 1000);
+  const start = now - 90 * 86400; // 90 days
+  try {
+    const resp = await fetch(
+      `https://coins.llama.fi/chart/${coins}?start=${start}&span=90&period=1d`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!resp.ok) return {};
+    const data = await resp.json();
+    const volatility = {};
+    for (const [sym, geckoId] of Object.entries(VOL_ASSETS)) {
+      const series = data.coins?.[`coingecko:${geckoId}`]?.prices;
+      if (!series || series.length < 10) continue;
+      const prices = series.map((p) => p.price);
+      const returns = [];
+      for (let i = 1; i < prices.length; i++) {
+        if (prices[i] > 0 && prices[i - 1] > 0) {
+          returns.push(Math.log(prices[i] / prices[i - 1]));
+        }
+      }
+      if (returns.length < 5) continue;
+      const mean = returns.reduce((s, r) => s + r, 0) / returns.length;
+      const variance = returns.reduce((s, r) => s + (r - mean) ** 2, 0) / (returns.length - 1);
+      const dailyVol = Math.sqrt(variance);
+      volatility[sym] = +(dailyVol * Math.sqrt(365)).toFixed(4); // annualized
+    }
+    return volatility;
+  } catch {
+    return {};
+  }
 }
 
 async function gqlQuery(query, variables = {}) {
@@ -72,6 +134,23 @@ async function getOnChainAUM(address) {
   return Number(BigInt(hex)) / 1e6;
 }
 
+// Fetch AUM for multiple addresses in small parallel batches to avoid rate limits
+async function batchGetOnChainAUM(addresses) {
+  if (!addresses.length) return {};
+  const map = {};
+  const BATCH = 3; // 3 concurrent calls at a time
+  for (let i = 0; i < addresses.length; i += BATCH) {
+    const chunk = addresses.slice(i, i + BATCH);
+    const results = await Promise.all(
+      chunk.map((addr) => getOnChainAUM(addr).catch(() => null))
+    );
+    chunk.forEach((addr, j) => {
+      if (results[j] != null) map[addr.toLowerCase()] = results[j];
+    });
+  }
+  return map;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
@@ -79,23 +158,21 @@ export default async function handler(req, res) {
 
   try {
     // Fire all requests in parallel
+    // Phase 1: Fire all GQL + price requests in parallel
     const [
-      globalsData,
-      apyData,
+      syrupData,
       usdcPoolData,
       usdtPoolData,
       strategiesData,
-      aumSkyUsdc,
-      aumAaveUsdt,
-      aumSkyHy,
+      collateralPrices,
+      assetVolatility,
     ] = await Promise.all([
-      // 1. Syrup globals
-      gqlQuery(`{ syrupGlobals { collateralRatio collateralValue loansValue } }`),
-
-      // 2. APY history
-      gqlQuery(`{ syrupGlobals { apyTimeSeries(range: YEAR) { timestamp apy boostApy coreApy usdBenchmarkApy } } }`),
-
-      // 3. USDC pool
+      // Combined syrupGlobals query (was 3 separate calls)
+      gqlQuery(`{ syrupGlobals {
+        collateralRatio collateralValue loansValue
+        apyTimeSeries(range: YEAR) { timestamp apy boostApy coreApy usdBenchmarkApy }
+        aumTimeSeries(range: YEAR) { timestamp assetsUsd assetsInStrategiesUsd loansUsd collateralUsd }
+      } }`),
       gqlQuery(`{
         poolV2(id: "${POOLS.usdc.id}") {
           name totalAssets shares
@@ -107,8 +184,6 @@ export default async function handler(req, res) {
           }
         }
       }`),
-
-      // 4. USDT pool
       gqlQuery(`{
         poolV2(id: "${POOLS.usdt.id}") {
           name totalAssets shares
@@ -120,8 +195,6 @@ export default async function handler(req, res) {
           }
         }
       }`),
-
-      // 5. Strategies (sky + aave)
       gqlQuery(`{
         skyStrategies(first: 20) {
           id state depositedAssets withdrawnAssets
@@ -133,15 +206,20 @@ export default async function handler(req, res) {
           pool { id name }
         }
       }`),
-
-      // 6-8. On-chain AUM for each strategy contract
-      getOnChainAUM(STRATEGY_CONTRACTS["sky-usdc"]).catch(() => null),
-      getOnChainAUM(STRATEGY_CONTRACTS["aave-usdt"]).catch(() => null),
-      getOnChainAUM(STRATEGY_CONTRACTS["sky-hy"]).catch(() => null),
+      fetchCollateralPrices(),
+      fetchAssetVolatility(),
     ]);
 
+    // Phase 2: Batch fetch on-chain AUM for all strategy contracts in one RPC call
+    const allStrategyIds = [
+      ...(strategiesData.skyStrategies || []).map((s) => s.id),
+      ...(strategiesData.aavestrategies || []).map((s) => s.id),
+    ].filter(Boolean);
+
+    const onChainAUMMap = await batchGetOnChainAUM(allStrategyIds);
+
     // --- Globals ---
-    const sg = globalsData.syrupGlobals;
+    const sg = syrupData.syrupGlobals;
     const globals = {
       collateralRatio: Number(sg.collateralRatio) / 1e6,
       collateralValue: Number(sg.collateralValue) / 1e6,
@@ -149,13 +227,26 @@ export default async function handler(req, res) {
     };
 
     // --- APY History ---
-    const apyHistory = (apyData.syrupGlobals.apyTimeSeries || []).map((pt) => ({
+    const apyHistory = (sg.apyTimeSeries || []).map((pt) => ({
       date: pt.timestamp,
       apy: parseRayToPercent(pt.apy),
       coreApy: parseRayToPercent(pt.coreApy),
       boostApy: parseRayToPercent(pt.boostApy),
       benchmarkApy: parseRayToPercent(pt.usdBenchmarkApy),
     }));
+
+    // --- Collateral History (8 decimals per Maple docs) ---
+    const aumHistory = (sg.aumTimeSeries || []).map((pt) => {
+      const idle = Number(pt.assetsUsd) / 1e8;
+      const strategies = Number(pt.assetsInStrategiesUsd) / 1e8;
+      const loans = Number(pt.loansUsd) / 1e8;
+      const collateral = Number(pt.collateralUsd) / 1e8;
+      return {
+        date: pt.timestamp,
+        aum: collateral + loans + idle + strategies,
+        collateral,
+      };
+    });
 
     // --- Pools & Loans ---
     function parsePool(poolData, poolId) {
@@ -165,7 +256,11 @@ export default async function handler(req, res) {
       const nav = shares > 0 ? totalAssets / shares : 1;
 
       const loans = (p.openTermLoans || []).map((l) => {
-        const collateral = l.collateral?.[0] || {};
+        const collateral = Array.isArray(l.collateral) ? (l.collateral[0] || {}) : (l.collateral || {});
+        const asset = collateral.asset || null;
+        const amount = parseCollateralAmount(collateral.assetAmount, asset);
+        const price = asset ? (collateralPrices[asset] ?? null) : null;
+        const valueUsd = (amount > 0 && price != null) ? amount * price : null;
         return {
           id: l.id,
           pool: poolId,
@@ -173,9 +268,9 @@ export default async function handler(req, res) {
           principal: Number(l.principalOwed) / 1e6,
           interestRate: Number(l.interestRate) / 10000,
           paymentInterval: l.paymentIntervalDays,
-          collateralAsset: collateral.asset || null,
-          collateralAmount: parseCollateralAmount(collateral.assetAmount, collateral.asset),
-          collateralValueUsd: Number(collateral.assetValueUsd || 0),
+          collateralAsset: asset,
+          collateralAmount: amount,
+          collateralValueUsd: valueUsd,
           custodian: collateral.custodian || null,
           borrower: l.borrower?.id || null,
         };
@@ -191,15 +286,8 @@ export default async function handler(req, res) {
     const usdt = parsePool(usdtPoolData, POOLS.usdt.id);
 
     const pools = [usdc.pool, usdt.pool];
-    const loans = [...usdc.loans, ...usdt.loans];
 
     // --- Strategies ---
-    const onChainAUMMap = {
-      [STRATEGY_CONTRACTS["sky-usdc"]]: aumSkyUsdc,
-      [STRATEGY_CONTRACTS["aave-usdt"]]: aumAaveUsdt,
-      [STRATEGY_CONTRACTS["sky-hy"]]: aumSkyHy,
-    };
-
     function parseStrategy(s, type) {
       const deposited = Number(s.depositedAssets) / 1e6;
       const withdrawn = Number(s.withdrawnAssets) / 1e6;
@@ -220,6 +308,32 @@ export default async function handler(req, res) {
     const skyStrategies = (strategiesData.skyStrategies || []).map((s) => parseStrategy(s, "sky"));
     const aaveStrategies = (strategiesData.aavestrategies || []).map((s) => parseStrategy(s, "aave"));
     const strategies = [...skyStrategies, ...aaveStrategies];
+
+    // Merge Syrup USDC/USDT strategies into loans as backing entries
+    const syrupStrategyLoans = strategies
+      .filter((s) => {
+        const pid = s.poolId?.toLowerCase();
+        return (pid === POOLS.usdc.id || pid === POOLS.usdt.id) && (s.onChainAUM > 0 || s.net > 0);
+      })
+      .map((s) => ({
+        id: s.id,
+        pool: s.poolId,
+        metaType: s.type, // "sky" or "aave"
+        principal: null,
+        interestRate: null,
+        paymentInterval: null,
+        collateralAsset: null,
+        collateralAmount: 0,
+        collateralValueUsd: s.onChainAUM ?? s.net,
+        custodian: null,
+        borrower: s.id,
+        strategyState: s.state,
+        deposited: s.deposited,
+        withdrawn: s.withdrawn,
+        onChainAUM: s.onChainAUM,
+      }));
+
+    const loans = [...usdc.loans, ...usdt.loans, ...syrupStrategyLoans];
 
     // --- Reconciliation ---
     function reconcile(pool, poolLoans, poolStrategies) {
@@ -250,7 +364,9 @@ export default async function handler(req, res) {
       loans,
       strategies,
       apyHistory,
+      aumHistory,
       reconciliation,
+      assetVolatility,
     });
   } catch (err) {
     console.error("Maple API error:", err);

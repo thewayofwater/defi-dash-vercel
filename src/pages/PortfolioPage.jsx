@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -12,6 +12,34 @@ const mono = "'JetBrains Mono', monospace";
 const ASSET_TABS = ["ETH", "BTC", "USD", "SOL", "HYPE", "EUR"];
 const PAGE_SIZE = 15;
 const MAX_POOLS = 10;
+const LS_KEY = "defi-dash-portfolios";
+const AUTOSAVE_NAME = "__autosave__";
+
+function loadSavedPortfolios() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { return []; }
+}
+function writeSavedPortfolios(list) {
+  localStorage.setItem(LS_KEY, JSON.stringify(list));
+}
+function encodePortfolioHash(asset, portfolio) {
+  if (!portfolio.length) return "";
+  const pools = portfolio.map((e) => `${e.poolId}:${e.weight}`).join(",");
+  return `#a=${asset}&p=${pools}`;
+}
+function decodePortfolioHash(hash) {
+  if (!hash || !hash.startsWith("#")) return null;
+  try {
+    const params = new URLSearchParams(hash.slice(1));
+    const asset = params.get("a");
+    const poolsStr = params.get("p");
+    if (!asset || !poolsStr) return null;
+    const portfolio = poolsStr.split(",").map((s) => {
+      const [poolId, w] = s.split(":");
+      return { poolId, weight: Number(w) || 0 };
+    }).filter((e) => e.poolId);
+    return { asset, portfolio };
+  } catch { return null; }
+}
 
 const ASSET_COLORS = {
   ETH: "#627eea", BTC: "#f7931a", USD: "#26a17b", SOL: "#9945ff", HYPE: "#50E3C2", EUR: "#1a4fc4",
@@ -218,6 +246,92 @@ export default function PortfolioPage() {
   const [sortDir, setSortDir] = useState("desc");
   const [page, setPage] = useState(0);
 
+  // ─── Persistence state ───
+  const [savedPortfolios, setSavedPortfolios] = useState([]);
+  const [showSaveMenu, setShowSaveMenu] = useState(false);
+  const [shareMsg, setShareMsg] = useState("");
+  const fileInputRef = useRef(null);
+  const hasRestored = useRef(false);
+
+  // Load saved portfolios from localStorage on mount + close menu on outside click
+  useEffect(() => { setSavedPortfolios(loadSavedPortfolios()); }, []);
+  useEffect(() => {
+    if (!showSaveMenu) return;
+    const close = (e) => {
+      if (!e.target.closest("[data-save-menu]")) setShowSaveMenu(false);
+    };
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [showSaveMenu]);
+
+  // Restore from URL hash (priority) or autosave on mount — wait for pools to load
+  useEffect(() => {
+    if (hasRestored.current || !allPools.length) return;
+    hasRestored.current = true;
+    const hashData = decodePortfolioHash(window.location.hash);
+    if (hashData) {
+      setSelectedAsset(hashData.asset);
+      setPortfolio(hashData.portfolio);
+      window.location.hash = ""; // clean up URL
+      return;
+    }
+    const saved = loadSavedPortfolios();
+    const autosave = saved.find((s) => s.name === AUTOSAVE_NAME);
+    if (autosave && autosave.portfolio.length) {
+      setSelectedAsset(autosave.selectedAsset);
+      setPortfolio(autosave.portfolio);
+    }
+  }, [allPools]);
+
+  // Auto-save to localStorage on portfolio or asset change
+  useEffect(() => {
+    if (!hasRestored.current) return; // don't save before initial restore
+    const saved = loadSavedPortfolios();
+    const filtered = saved.filter((s) => s.name !== AUTOSAVE_NAME);
+    filtered.unshift({ name: AUTOSAVE_NAME, selectedAsset, portfolio, createdAt: Date.now() });
+    writeSavedPortfolios(filtered);
+    setSavedPortfolios(filtered);
+  }, [portfolio, selectedAsset]);
+
+  // ─── Save/Load/Share/Export/Import actions ───
+  const savePortfolio = useCallback((name) => {
+    if (!name || !portfolio.length) return;
+    const saved = loadSavedPortfolios();
+    const existing = saved.findIndex((s) => s.name === name && s.name !== AUTOSAVE_NAME);
+    const entry = { name, selectedAsset, portfolio, createdAt: Date.now() };
+    if (existing >= 0) saved[existing] = entry;
+    else saved.push(entry);
+    writeSavedPortfolios(saved);
+    setSavedPortfolios(saved);
+    setShowSaveMenu(false);
+  }, [portfolio, selectedAsset]);
+
+  const loadPortfolio = useCallback((entry) => {
+    setSelectedAsset(entry.selectedAsset);
+    setPortfolio(entry.portfolio);
+    setShowSaveMenu(false);
+    setPage(0);
+    setSearchQuery("");
+  }, []);
+
+  const deletePortfolio = useCallback((name) => {
+    const saved = loadSavedPortfolios().filter((s) => s.name !== name);
+    writeSavedPortfolios(saved);
+    setSavedPortfolios(saved);
+  }, []);
+
+  const sharePortfolio = useCallback(() => {
+    const hash = encodePortfolioHash(selectedAsset, portfolio);
+    const url = `${window.location.origin}${window.location.pathname}${hash}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShareMsg("Copied!");
+      setTimeout(() => setShareMsg(""), 2000);
+    }).catch(() => {
+      setShareMsg("Copy failed");
+      setTimeout(() => setShareMsg(""), 2000);
+    });
+  }, [selectedAsset, portfolio]);
+
   // Filter pools by asset
   const assetPools = useMemo(() => allPools.filter((p) => p.baseAsset === selectedAsset), [allPools, selectedAsset]);
 
@@ -227,6 +341,48 @@ export default function PortfolioPage() {
     allPools.forEach((p) => { map[p.id] = p; });
     return map;
   }, [allPools]);
+
+  // Export/Import (needs poolMap)
+  const exportPortfolio = useCallback(() => {
+    const data = {
+      name: "Portfolio Export",
+      selectedAsset,
+      portfolio: portfolio.map((e) => {
+        const pool = poolMap[e.poolId];
+        return { poolId: e.poolId, weight: e.weight, symbol: pool?.symbol, project: pool?.project, chain: pool?.chain };
+      }),
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `portfolio-${selectedAsset}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [selectedAsset, portfolio, poolMap]);
+
+  const importPortfolio = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.portfolio?.length) return;
+        const validPortfolio = data.portfolio
+          .filter((e) => e.poolId && typeof e.weight === "number")
+          .slice(0, MAX_POOLS)
+          .map((e) => ({ poolId: e.poolId, weight: Math.max(0, Math.min(100, e.weight)) }));
+        if (data.selectedAsset) setSelectedAsset(data.selectedAsset);
+        setPortfolio(validPortfolio);
+        setPage(0);
+        setSearchQuery("");
+      } catch { /* invalid JSON — silently ignore */ }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, []);
 
   // Portfolio set for quick lookup
   const portfolioIds = useMemo(() => new Set(portfolio.map((e) => e.poolId)), [portfolio]);
@@ -448,12 +604,104 @@ export default function PortfolioPage() {
           <ModuleCard>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
               <SectionHeader title="Your Portfolio" subtitle={portfolio.length ? `${portfolio.length} pools selected` : "Add pools from the left"} />
-              {portfolio.length > 0 && (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={equalWeight} style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.15)", borderRadius: 3, padding: "4px 10px", fontSize: 10, fontFamily: mono, color: "#22d3ee", cursor: "pointer" }}>Equal Weight</button>
-                  <button onClick={clearAll} style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 3, padding: "4px 10px", fontSize: 10, fontFamily: mono, color: "#f87171", cursor: "pointer" }}>Clear All</button>
-                </div>
-              )}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {portfolio.length > 0 && (
+                  <>
+                    <button onClick={equalWeight} style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.15)", borderRadius: 3, padding: "4px 10px", fontSize: 10, fontFamily: mono, color: "#22d3ee", cursor: "pointer" }}>Equal Weight</button>
+                    <button onClick={clearAll} style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 3, padding: "4px 10px", fontSize: 10, fontFamily: mono, color: "#f87171", cursor: "pointer" }}>Clear All</button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Save / Load / Share / Export / Import toolbar */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center", position: "relative" }}>
+              {/* Save button with dropdown */}
+              <div data-save-menu style={{ position: "relative" }}>
+                <button
+                  onClick={() => setShowSaveMenu(!showSaveMenu)}
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 3, padding: "4px 10px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer" }}
+                >
+                  Save {"\u25BE"}
+                </button>
+                {showSaveMenu && (
+                  <div style={{
+                    position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 50,
+                    background: "#131926", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 5,
+                    padding: 8, minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                  }}>
+                    {/* Save new */}
+                    <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="Portfolio name..."
+                        id="portfolio-save-name"
+                        style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 3, padding: "4px 8px", fontSize: 10, fontFamily: mono, color: "#cbd5e1", outline: "none" }}
+                        onKeyDown={(e) => { if (e.key === "Enter") savePortfolio(e.target.value.trim()); }}
+                      />
+                      <button
+                        onClick={() => {
+                          const input = document.getElementById("portfolio-save-name");
+                          savePortfolio(input?.value?.trim() || `Portfolio ${savedPortfolios.filter((s) => s.name !== AUTOSAVE_NAME).length + 1}`);
+                        }}
+                        style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.15)", borderRadius: 3, padding: "4px 8px", fontSize: 10, fontFamily: mono, color: "#22d3ee", cursor: "pointer", whiteSpace: "nowrap" }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                    {/* Saved portfolios list */}
+                    {savedPortfolios.filter((s) => s.name !== AUTOSAVE_NAME).length > 0 && (
+                      <>
+                        <div style={{ fontSize: 9, fontFamily: mono, color: "#4a5568", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Saved Portfolios</div>
+                        {savedPortfolios.filter((s) => s.name !== AUTOSAVE_NAME).map((s) => (
+                          <div key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                            <button
+                              onClick={() => loadPortfolio(s)}
+                              style={{ background: "none", border: "none", color: "#cbd5e1", fontSize: 11, fontFamily: mono, cursor: "pointer", textAlign: "left", flex: 1, padding: "2px 0" }}
+                            >
+                              {s.name} <span style={{ color: "#4a5568", fontSize: 9 }}>({s.portfolio.length} pools · {s.selectedAsset})</span>
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); deletePortfolio(s.name); }}
+                              style={{ background: "none", border: "none", color: "#f87171", fontSize: 12, cursor: "pointer", padding: "0 4px" }}
+                            >
+                              {"\u00D7"}
+                            </button>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Share */}
+              <button
+                onClick={sharePortfolio}
+                disabled={!portfolio.length}
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 3, padding: "4px 10px", fontSize: 10, fontFamily: mono, color: portfolio.length ? "#94a3b8" : "#2d3a4a", cursor: portfolio.length ? "pointer" : "default" }}
+              >
+                Share
+              </button>
+              {shareMsg && <span style={{ fontSize: 10, fontFamily: mono, color: "#4ade80" }}>{shareMsg}</span>}
+
+              {/* Export */}
+              <button
+                onClick={exportPortfolio}
+                disabled={!portfolio.length}
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 3, padding: "4px 10px", fontSize: 10, fontFamily: mono, color: portfolio.length ? "#94a3b8" : "#2d3a4a", cursor: portfolio.length ? "pointer" : "default" }}
+              >
+                Export
+              </button>
+
+              {/* Import */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 3, padding: "4px 10px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer" }}
+              >
+                Import
+              </button>
+              <input ref={fileInputRef} type="file" accept=".json" onChange={importPortfolio} style={{ display: "none" }} />
             </div>
             {!portfolio.length ? (
               <div style={{ color: "#4a5568", fontSize: 12, fontFamily: mono, textAlign: "center", padding: 60 }}>

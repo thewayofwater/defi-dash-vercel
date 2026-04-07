@@ -272,43 +272,28 @@ function paginate(items, page, perPage = PAGE_SIZE) {
 
 function Pagination({ page, totalPages, total, label, onPageChange }) {
   if (total <= PAGE_SIZE) return null;
-  const start = page * PAGE_SIZE + 1;
-  const end = Math.min((page + 1) * PAGE_SIZE, total);
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, padding: "10px 0", fontSize: 10, fontFamily: mono, color: "#6b7a8d" }}>
-      <button
-        onClick={() => onPageChange(page - 1)}
-        disabled={page === 0}
-        style={{
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 4,
-          padding: "4px 10px",
-          fontSize: 10,
-          fontFamily: mono,
-          color: page === 0 ? "#2d3a4a" : "#94a3b8",
-          cursor: page === 0 ? "default" : "pointer",
-        }}
-      >
-        ← Prev
-      </button>
-      <span>{start}–{end} of {total} {label}</span>
-      <button
-        onClick={() => onPageChange(page + 1)}
-        disabled={page >= totalPages - 1}
-        style={{
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 4,
-          padding: "4px 10px",
-          fontSize: 10,
-          fontFamily: mono,
-          color: page >= totalPages - 1 ? "#2d3a4a" : "#94a3b8",
-          cursor: page >= totalPages - 1 ? "default" : "pointer",
-        }}
-      >
-        Next →
-      </button>
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, marginTop: 10, flexWrap: "wrap" }}>
+      <button onClick={() => onPageChange(0)} disabled={page === 0} style={{ background: "none", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer", opacity: page === 0 ? 0.3 : 1 }}>{"\u00AB"}</button>
+      <button onClick={() => onPageChange(Math.max(0, page - 1))} disabled={page === 0} style={{ background: "none", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer", opacity: page === 0 ? 0.3 : 1 }}>{"\u2039"}</button>
+      {(() => {
+        const pages = [];
+        let start = Math.max(0, page - 2);
+        let end = Math.min(totalPages - 1, start + 4);
+        start = Math.max(0, end - 4);
+        if (start > 0) { pages.push(0); if (start > 1) pages.push("..."); }
+        for (let i = start; i <= end; i++) pages.push(i);
+        if (end < totalPages - 1) { if (end < totalPages - 2) pages.push("..."); pages.push(totalPages - 1); }
+        return pages.map((p, idx) =>
+          p === "..." ? (
+            <span key={`dot-${idx}`} style={{ fontSize: 10, fontFamily: mono, color: "#4a5568", padding: "3px 2px" }}>{"\u2026"}</span>
+          ) : (
+            <button key={p} onClick={() => onPageChange(p)} style={{ background: p === page ? "rgba(34,211,238,0.15)" : "none", border: p === page ? "1px solid rgba(34,211,238,0.3)" : "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: p === page ? "#22d3ee" : "#94a3b8", cursor: "pointer", fontWeight: p === page ? 600 : 400, minWidth: 28, textAlign: "center" }}>{p + 1}</button>
+          )
+        );
+      })()}
+      <button onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} style={{ background: "none", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer", opacity: page >= totalPages - 1 ? 0.3 : 1 }}>{"\u203A"}</button>
+      <button onClick={() => onPageChange(totalPages - 1)} disabled={page >= totalPages - 1} style={{ background: "none", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer", opacity: page >= totalPages - 1 ? 0.3 : 1 }}>{"\u00BB"}</button>
     </div>
   );
 }
@@ -329,6 +314,7 @@ function ActiveMarketsTable({ markets }) {
   const [sortKey, setSortKey] = useState("tvlUsd");
   const [sortDir, setSortDir] = useState("desc");
   const [filters, setFilters] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);
   const active = useMemo(() => markets.filter((m) => !m.isExpired), [markets]);
 
@@ -345,9 +331,13 @@ function ActiveMarketsTable({ markets }) {
     return active.filter((m) => {
       if (filters.chain && m.chain !== filters.chain) return false;
       if (filters.category && !(m.categories || []).includes(filters.category)) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        if (!(m.name || "").toLowerCase().includes(q) && !(m.chain || "").toLowerCase().includes(q) && !(m.categories || []).some((c) => c.toLowerCase().includes(q))) return false;
+      }
       return true;
     });
-  }, [active, filters]);
+  }, [active, filters, searchQuery]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -376,6 +366,13 @@ function ActiveMarketsTable({ markets }) {
 
   return (
     <div>
+      <input
+        type="text"
+        placeholder="Search by name, chain, or category..."
+        value={searchQuery}
+        onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, padding: "7px 10px", fontSize: 12, fontFamily: mono, color: "#cbd5e1", outline: "none", marginBottom: 10, boxSizing: "border-box" }}
+      />
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         {Object.entries(filterOptions).map(([key, { label, values }]) => (
           <div key={key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -481,7 +478,6 @@ function ExpiredMarketsTable({ markets }) {
 
 export default function PendlePage() {
   const { markets, spendle, tvlHistory, loading, refreshing, refreshKey, error, lastUpdated, refresh } = usePendleData();
-  const [tab, setTab] = useState("active");
   const [assetFilter, setAssetFilter] = useState("All");
 
   const filteredMarkets = useMemo(() => {
@@ -686,29 +682,14 @@ export default function PendlePage() {
         </div>
       </div>
 
-      {/* Tabs + Tables */}
+      {/* Markets Table */}
       <div style={{ padding: "20px 26px", display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button style={TAB_STYLE(tab === "active")} onClick={() => setTab("active")}>Active ({activeMarkets.length})</button>
-          <button style={TAB_STYLE(tab === "expired")} onClick={() => setTab("expired")}>Expired ({expiredMarkets.length})</button>
-        </div>
-
-        {tab === "active" && (
-          <ModuleCard>
-            <SectionHeader title="Active PT Markets" subtitle={`${activeMarkets.length} fixed-yield markets`} />
-            {refreshing ? <ChartShimmer height={300} /> : (
-              <div key={refreshKey}><ActiveMarketsTable markets={filteredMarkets} /></div>
-            )}
-          </ModuleCard>
-        )}
-        {tab === "expired" && (
-          <ModuleCard>
-            <SectionHeader title="Expired PT Markets" subtitle={`${expiredMarkets.length} matured PTs`} />
-            {refreshing ? <ChartShimmer height={300} /> : (
-              <div key={refreshKey}><ExpiredMarketsTable markets={filteredMarkets} /></div>
-            )}
-          </ModuleCard>
-        )}
+        <ModuleCard>
+          <SectionHeader title="Active PT Markets" subtitle={`${activeMarkets.length} fixed-yield markets`} />
+          {refreshing ? <ChartShimmer height={300} /> : (
+            <div key={refreshKey}><ActiveMarketsTable markets={filteredMarkets} /></div>
+          )}
+        </ModuleCard>
       </div>
     </div>
   );

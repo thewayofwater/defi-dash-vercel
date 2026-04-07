@@ -135,10 +135,10 @@ export default function NavBar() {
         {navLink("/", "Overview", "⊞")}
 
         {sectionLabel("Protocols")}
-        {navLink("/aave", "Aave", "◆")}
-        {navLink("/morpho", "Morpho", "◈")}
-        {navLink("/pendle", "Pendle", "◉")}
-        {navLink("/maple", "Maple", "◇")}
+        {navLink("/aave", "Aave", "△")}
+        {navLink("/morpho", "Morpho", "⬡")}
+        {navLink("/pendle", "Pendle", "⊿")}
+        {navLink("/maple", "Maple", "❋")}
 
         {sectionLabel("Tools")}
         {navLink("/compare", "Compare", "⇄")}

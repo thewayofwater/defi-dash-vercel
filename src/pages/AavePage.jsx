@@ -84,43 +84,28 @@ const PAGE_SIZE = 25;
 
 function Pagination({ page, totalPages, total, label, onPageChange }) {
   if (total <= PAGE_SIZE) return null;
-  const start = page * PAGE_SIZE + 1;
-  const end = Math.min((page + 1) * PAGE_SIZE, total);
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, padding: "10px 0", fontSize: 10, fontFamily: mono, color: "#6b7a8d" }}>
-      <button
-        onClick={() => onPageChange(page - 1)}
-        disabled={page === 0}
-        style={{
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 4,
-          padding: "4px 10px",
-          fontSize: 10,
-          fontFamily: mono,
-          color: page === 0 ? "#2d3a4a" : "#94a3b8",
-          cursor: page === 0 ? "default" : "pointer",
-        }}
-      >
-        ← Prev
-      </button>
-      <span>{start}–{end} of {total} {label}</span>
-      <button
-        onClick={() => onPageChange(page + 1)}
-        disabled={page >= totalPages - 1}
-        style={{
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 4,
-          padding: "4px 10px",
-          fontSize: 10,
-          fontFamily: mono,
-          color: page >= totalPages - 1 ? "#2d3a4a" : "#94a3b8",
-          cursor: page >= totalPages - 1 ? "default" : "pointer",
-        }}
-      >
-        Next →
-      </button>
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, marginTop: 10, flexWrap: "wrap" }}>
+      <button onClick={() => onPageChange(0)} disabled={page === 0} style={{ background: "none", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer", opacity: page === 0 ? 0.3 : 1 }}>{"\u00AB"}</button>
+      <button onClick={() => onPageChange(Math.max(0, page - 1))} disabled={page === 0} style={{ background: "none", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer", opacity: page === 0 ? 0.3 : 1 }}>{"\u2039"}</button>
+      {(() => {
+        const pages = [];
+        let start = Math.max(0, page - 2);
+        let end = Math.min(totalPages - 1, start + 4);
+        start = Math.max(0, end - 4);
+        if (start > 0) { pages.push(0); if (start > 1) pages.push("..."); }
+        for (let i = start; i <= end; i++) pages.push(i);
+        if (end < totalPages - 1) { if (end < totalPages - 2) pages.push("..."); pages.push(totalPages - 1); }
+        return pages.map((p, idx) =>
+          p === "..." ? (
+            <span key={`dot-${idx}`} style={{ fontSize: 10, fontFamily: mono, color: "#4a5568", padding: "3px 2px" }}>{"\u2026"}</span>
+          ) : (
+            <button key={p} onClick={() => onPageChange(p)} style={{ background: p === page ? "rgba(34,211,238,0.15)" : "none", border: p === page ? "1px solid rgba(34,211,238,0.3)" : "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: p === page ? "#22d3ee" : "#94a3b8", cursor: "pointer", fontWeight: p === page ? 600 : 400, minWidth: 28, textAlign: "center" }}>{p + 1}</button>
+          )
+        );
+      })()}
+      <button onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} style={{ background: "none", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer", opacity: page >= totalPages - 1 ? 0.3 : 1 }}>{"\u203A"}</button>
+      <button onClick={() => onPageChange(totalPages - 1)} disabled={page >= totalPages - 1} style={{ background: "none", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, padding: "3px 8px", fontSize: 10, fontFamily: mono, color: "#94a3b8", cursor: "pointer", opacity: page >= totalPages - 1 ? 0.3 : 1 }}>{"\u00BB"}</button>
     </div>
   );
 }
@@ -532,6 +517,7 @@ function V4ReservesTable({ reserves }) {
   const [hubFilter, setHubFilter] = useState("");
   const [spokeFilter, setSpokeFilter] = useState("");
   const [assetFilter, setAssetFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);
 
   const hubs = useMemo(() => [...new Set(reserves.map((r) => r.hub))].sort(), [reserves]);
@@ -542,9 +528,13 @@ function V4ReservesTable({ reserves }) {
       if (hubFilter && r.hub !== hubFilter) return false;
       if (spokeFilter && r.spoke !== spokeFilter) return false;
       if (assetFilter && getAssetClass(r.symbol) !== assetFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        if (!(r.symbol || "").toLowerCase().includes(q) && !(r.hub || "").toLowerCase().includes(q) && !(r.spoke || "").toLowerCase().includes(q)) return false;
+      }
       return true;
     });
-  }, [reserves, hubFilter, spokeFilter, assetFilter]);
+  }, [reserves, hubFilter, spokeFilter, assetFilter, searchQuery]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -566,6 +556,13 @@ function V4ReservesTable({ reserves }) {
 
   return (
     <div>
+      <input
+        type="text"
+        placeholder="Search by asset, hub, or market..."
+        value={searchQuery}
+        onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, padding: "7px 10px", fontSize: 12, fontFamily: mono, color: "#cbd5e1", outline: "none", marginBottom: 10, boxSizing: "border-box" }}
+      />
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: 10, color: "#6b7a8d", fontFamily: mono, letterSpacing: 0.5 }}>Hub</span>
         <select style={FILTER_STYLE} value={hubFilter} onChange={(e) => { setHubFilter(e.target.value); setPage(0); }}>
@@ -631,6 +628,7 @@ function V3PoolsTable({ pools }) {
   const [sortKey, setSortKey] = useState("tvlUsd");
   const [sortDir, setSortDir] = useState("desc");
   const [filters, setFilters] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);
 
   const filterOptions = useMemo(() => {
@@ -648,9 +646,13 @@ function V3PoolsTable({ pools }) {
       if (filters.assetClass && getAssetClass(p.symbol) !== filters.assetClass) return false;
       if (filters.chain && p.chain !== filters.chain) return false;
       if (filters.market && (p.market || "core") !== filters.market) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        if (!(p.symbol || "").toLowerCase().includes(q) && !(p.chain || "").toLowerCase().includes(q) && !(p.market || "").toLowerCase().includes(q)) return false;
+      }
       return true;
     });
-  }, [pools, filters]);
+  }, [pools, filters, searchQuery]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -672,6 +674,13 @@ function V3PoolsTable({ pools }) {
 
   return (
     <div>
+      <input
+        type="text"
+        placeholder="Search by asset, chain, or market..."
+        value={searchQuery}
+        onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, padding: "7px 10px", fontSize: 12, fontFamily: mono, color: "#cbd5e1", outline: "none", marginBottom: 10, boxSizing: "border-box" }}
+      />
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         {Object.entries(filterOptions).map(([key, { label, values }]) => (
           <div key={key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
