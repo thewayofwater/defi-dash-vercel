@@ -242,6 +242,8 @@ export default async function handler(req, res) {
 
     const allTimeHistory = parseTimeSeries(portfolioMap.allTime?.accountValueHistory);
     const allTimePnl = parseTimeSeries(portfolioMap.allTime?.pnlHistory, false);
+    // Unfiltered value series for monthly returns (must align by index with PnL)
+    const allTimeHistoryRaw = parseTimeSeries(portfolioMap.allTime?.accountValueHistory, false);
     const dayHistory = parseTimeSeries(portfolioMap.day?.accountValueHistory);
     const weekHistory = parseTimeSeries(portfolioMap.week?.accountValueHistory);
     const monthHistory = parseTimeSeries(portfolioMap.month?.accountValueHistory);
@@ -262,7 +264,8 @@ export default async function handler(req, res) {
     }
 
     // Use allTime only for monthly returns (matches Hypurrscan: this.rawData = e.portfolio[3][1])
-    const monthlyReturns = computeMonthlyReturnsHypurrscan(allTimeHistory, allTimePnl);
+    // Must use unfiltered series so value[i] and pnl[i] align by index
+    const monthlyReturns = computeMonthlyReturnsHypurrscan(allTimeHistoryRaw, allTimePnl);
     const drawdownSeries = computeDrawdown(allTimeHistory);
     const riskMetrics = computeRiskMetrics(allTimeHistory, allTimePnl, monthlyReturns);
 
