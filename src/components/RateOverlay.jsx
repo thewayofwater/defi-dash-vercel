@@ -11,8 +11,8 @@ const mono = "'JetBrains Mono', monospace";
 export default function RateOverlay({ rateData, asset, yieldIndex, color }) {
   if (!rateData?.protocols?.length) return null;
 
-  const { protocols } = rateData;
-  const top = protocols[0];
+  const { protocols, topByRate } = rateData;
+  const top = topByRate || protocols[0];
 
   return (
     <div>

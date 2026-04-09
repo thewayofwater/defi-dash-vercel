@@ -231,11 +231,21 @@ function V4SupplyByMarketChart({ reserves }) {
   );
 }
 
+function normalizeAssetSymbol(symbol) {
+  if (!symbol) return symbol;
+  // Strip PT- prefix and date suffix: PT-SUSDE-7MAY2026 → SUSDE, PT-USDE-9APR2026 → USDE
+  let s = symbol.replace(/^PT-/i, "");
+  // Remove trailing date like -7MAY2026, -9APR2026, -27NOV2025, -25SEP2025, etc.
+  s = s.replace(/-\d{1,2}[A-Z]{3}\d{4}$/i, "");
+  return s;
+}
+
 function TopAssetsByTvlChart({ pools }) {
   const data = useMemo(() => {
     const byAsset = {};
     pools.forEach((p) => {
-      byAsset[p.symbol] = (byAsset[p.symbol] || 0) + p.tvlUsd;
+      const key = normalizeAssetSymbol(p.symbol);
+      byAsset[key] = (byAsset[key] || 0) + p.tvlUsd;
     });
     return Object.entries(byAsset).map(([name, tvl]) => ({ name, tvl })).sort((a, b) => b.tvl - a.tvl).slice(0, 12);
   }, [pools]);
@@ -749,6 +759,7 @@ function V3PoolsTable({ pools }) {
 export default function AavePage() {
   const { v4, v3, loading, refreshing, refreshKey, error, lastUpdated, refresh } = useAaveData();
   const [tab, setTab] = useState("v3");
+  const [supplyBorrowView, setSupplyBorrowView] = useState("v3");
 
   const v3Stats = useMemo(() => {
     const pools = v3.pools || [];
@@ -904,20 +915,32 @@ export default function AavePage() {
 
       {/* Charts */}
       <div style={{ padding: "20px 26px 0", display: "flex", flexDirection: "column", gap: 16 }}>
-        {(v3.tvlHistory?.length > 0) && (
+        {(v3.tvlHistory?.length > 0 || v4.history?.length > 0) && (
           <ModuleCard>
-            <SectionHeader title="V3 Supply & Borrow" subtitle="Historical supply and borrow across all chains (via DeFiLlama)" />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <SectionHeader title={`${supplyBorrowView === "v3" ? "V3" : "V4"} Supply & Borrow`} subtitle={supplyBorrowView === "v3" ? "Historical supply and borrow across all chains (via DeFiLlama)" : "Aave v4 historical data (Ethereum)"} />
+              <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                {[{ key: "v3", label: "V3" }, { key: "v4", label: "V4" }].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setSupplyBorrowView(key)}
+                    style={{
+                      background: supplyBorrowView === key ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.04)",
+                      border: supplyBorrowView === key ? "1px solid rgba(139,92,246,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                      borderRadius: 3, padding: "3px 10px", fontSize: 10, fontFamily: mono,
+                      color: supplyBorrowView === key ? ACCENT : "#6b7a8d",
+                      cursor: "pointer", letterSpacing: 0.5,
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             {refreshing ? <ChartShimmer height={280} /> : (
-              <div key={refreshKey}><V3TvlChart tvlHistory={v3.tvlHistory} /></div>
-            )}
-          </ModuleCard>
-        )}
-
-        {(v4.history?.length > 0) && (
-          <ModuleCard>
-            <SectionHeader title="V4 Supply & Borrow" subtitle="Aave v4 historical data (Ethereum)" />
-            {refreshing ? <ChartShimmer height={280} /> : (
-              <div key={refreshKey}><V4HistoryChart history={v4.history} /></div>
+              <div key={`${refreshKey}-${supplyBorrowView}`}>
+                {supplyBorrowView === "v3" ? <V3TvlChart tvlHistory={v3.tvlHistory} /> : <V4HistoryChart history={v4.history} />}
+              </div>
             )}
           </ModuleCard>
         )}

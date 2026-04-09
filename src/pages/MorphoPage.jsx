@@ -692,6 +692,7 @@ function CollateralExplorer({ markets }) {
   const [sortKey, setSortKey] = useState("supply");
   const [sortDir, setSortDir] = useState("desc");
   const [typeFilter, setTypeFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);
 
   const data = useMemo(() => {
@@ -719,9 +720,19 @@ function CollateralExplorer({ markets }) {
   const types = useMemo(() => [...new Set(data.map((d) => d.type))].sort(), [data]);
 
   const filtered = useMemo(() => {
-    if (!typeFilter) return data;
-    return data.filter((d) => d.type === typeFilter);
-  }, [data, typeFilter]);
+    let result = data;
+    if (typeFilter) result = result.filter((d) => d.type === typeFilter);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((d) =>
+        d.name.toLowerCase().includes(q) ||
+        d.type.toLowerCase().includes(q) ||
+        d.loanAssets.some((a) => a.toLowerCase().includes(q)) ||
+        d.chains.some((c) => c.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [data, typeFilter, searchQuery]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -740,6 +751,13 @@ function CollateralExplorer({ markets }) {
 
   return (
     <div>
+      <input
+        type="text"
+        placeholder="Search by collateral, type, loan asset, or chain..."
+        value={searchQuery}
+        onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, padding: "7px 10px", fontSize: 12, fontFamily: mono, color: "#cbd5e1", outline: "none", marginBottom: 10, boxSizing: "border-box" }}
+      />
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: 10, color: "#6b7a8d", fontFamily: mono, letterSpacing: 0.5 }}>Type</span>
         <select
@@ -948,6 +966,8 @@ export default function MorphoPage() {
   const { vaults, vaultsV2, markets, history, loading, refreshing, refreshKey, error, lastUpdated, refresh } = useMorphoData();
   const [tab, setTab] = useState("markets");
   const [newPeriodDays, setNewPeriodDays] = useState(14);
+  const [curatorView, setCuratorView] = useState("tvl");
+  const [chainView, setChainView] = useState("tvl");
 
   const newCutoff = useMemo(() => Math.floor(Date.now() / 1000) - newPeriodDays * 86400, [newPeriodDays]);
 
@@ -1125,27 +1145,47 @@ export default function MorphoPage() {
         )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <ModuleCard>
-            <SectionHeader title="TVL by Curator" subtitle="Combined V1 + V2 vault deposits per curator" />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <SectionHeader title={curatorView === "tvl" ? "TVL by Curator" : "Fee Revenue by Curator"} subtitle={curatorView === "tvl" ? "Combined V1 + V2 vault deposits per curator" : "Estimated annualized performance fee revenue"} />
+              <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                {[{ key: "tvl", label: "TVL" }, { key: "fee", label: "Fee" }].map(({ key, label }) => (
+                  <button key={key} onClick={() => setCuratorView(key)} style={{
+                    background: curatorView === key ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)",
+                    border: curatorView === key ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: 3, padding: "3px 10px", fontSize: 10, fontFamily: mono, color: curatorView === key ? "#3b82f6" : "#6b7a8d", cursor: "pointer", letterSpacing: 0.5,
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
             {refreshing ? <ChartShimmer height={280} /> : (
-              <div key={refreshKey}><CuratorTvlChart vaults={[...vaults, ...vaultsV2]} curatorColorMap={curatorColorMap} /></div>
+              <div key={`${refreshKey}-${curatorView}`}>
+                {curatorView === "tvl"
+                  ? <CuratorTvlChart vaults={[...vaults, ...vaultsV2]} curatorColorMap={curatorColorMap} />
+                  : <FeeRevenueChart vaults={[...vaults, ...vaultsV2]} curatorColorMap={curatorColorMap} />
+                }
+              </div>
             )}
           </ModuleCard>
           <ModuleCard>
-            <SectionHeader title="Fee Revenue by Curator" subtitle="Estimated annualized performance fee revenue (TVL × yield × fee rate)" />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <SectionHeader title={chainView === "tvl" ? "TVL by Chain" : "Vault Count by Chain"} subtitle={chainView === "tvl" ? "Combined vault and market TVL per chain" : "Number of V1 + V2 vaults deployed per chain"} />
+              <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                {[{ key: "tvl", label: "TVL" }, { key: "count", label: "Count" }].map(({ key, label }) => (
+                  <button key={key} onClick={() => setChainView(key)} style={{
+                    background: chainView === key ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)",
+                    border: chainView === key ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: 3, padding: "3px 10px", fontSize: 10, fontFamily: mono, color: chainView === key ? "#3b82f6" : "#6b7a8d", cursor: "pointer", letterSpacing: 0.5,
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
             {refreshing ? <ChartShimmer height={280} /> : (
-              <div key={refreshKey}><FeeRevenueChart vaults={[...vaults, ...vaultsV2]} curatorColorMap={curatorColorMap} /></div>
-            )}
-          </ModuleCard>
-          <ModuleCard>
-            <SectionHeader title="TVL by Chain" subtitle="Combined vault and market TVL per chain" />
-            {refreshing ? <ChartShimmer height={280} /> : (
-              <div key={refreshKey}><ChainTvlChart vaults={vaults} vaultsV2={vaultsV2} markets={markets} /></div>
-            )}
-          </ModuleCard>
-          <ModuleCard>
-            <SectionHeader title="Vault Count by Chain" subtitle="Number of V1 + V2 vaults deployed per chain" />
-            {refreshing ? <ChartShimmer height={280} /> : (
-              <div key={refreshKey}><VaultCountByChainChart vaults={vaults} vaultsV2={vaultsV2} /></div>
+              <div key={`${refreshKey}-${chainView}`}>
+                {chainView === "tvl"
+                  ? <ChainTvlChart vaults={vaults} vaultsV2={vaultsV2} markets={markets} />
+                  : <VaultCountByChainChart vaults={vaults} vaultsV2={vaultsV2} />
+                }
+              </div>
             )}
           </ModuleCard>
           <ModuleCard>

@@ -22,7 +22,7 @@ export default function TVLHeatmap({ pools, asset }) {
       chainPools[p.chain] = (chainPools[p.chain] || 0) + 1;
     });
     return Object.entries(chainTvl)
-      .filter(([ch]) => (chainPools[ch] || 0) >= CHAIN_MIN_POOLS)
+      .filter(([ch, tvl]) => (chainPools[ch] || 0) >= CHAIN_MIN_POOLS && tvl >= 10_000_000)
       .sort((a, b) => b[1] - a[1])
       .slice(0, NUM_CHAINS)
       .map(([ch]) => ch);

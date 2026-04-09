@@ -253,6 +253,16 @@ export default function App() {
       >
         <ModuleCard>
           <SectionHeader
+            title={`${selectedAsset} Yield Breakdown`}
+            subtitle={`Top protocols and chains by ${selectedAsset} yield (single-exposure pools)`}
+          />
+          {refreshing ? <ChartShimmer height={250} /> : (
+            <div key={refreshKey}><AssetYieldBreakdown stats={assetProtocolStats} asset={selectedAsset} yieldIndex={yieldIndex} color={color} /></div>
+          )}
+        </ModuleCard>
+
+        <ModuleCard>
+          <SectionHeader
             title={`${selectedAsset} Yield Chatter`}
             subtitle="Recent tweets about yield opportunities"
           />
@@ -272,16 +282,6 @@ export default function App() {
         <ModuleCard>
           {refreshing ? <ChartShimmer height={300} /> : (
             <div key={refreshKey}><TVLHeatmap pools={assetPools} asset={selectedAsset} /></div>
-          )}
-        </ModuleCard>
-
-        <ModuleCard>
-          <SectionHeader
-            title={`${selectedAsset} Yield Breakdown`}
-            subtitle={`Top protocols and chains by ${selectedAsset} yield (single-exposure pools)`}
-          />
-          {refreshing ? <ChartShimmer height={250} /> : (
-            <div key={refreshKey}><AssetYieldBreakdown stats={assetProtocolStats} asset={selectedAsset} yieldIndex={yieldIndex} color={color} /></div>
           )}
         </ModuleCard>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { CATEGORY_MAP, CHAIN_MIN_POOLS, chainName } from "../utils/constants";
+import { CATEGORY_MAP, CHAIN_MIN_POOLS, TRACKED_CATEGORIES, chainName } from "../utils/constants";
 
 const POOLS_URL = "https://yields.llama.fi/pools";
 const PROTOCOLS_URL = "https://api.llama.fi/protocols";
@@ -265,16 +265,23 @@ export function useDeFiData(selectedAsset) {
     const byCh = {};
     const chPools = {};
     assetPools.forEach((p) => {
+      // Only include pools with tracked categories (matches heatmap filter)
+      if (!p.dashCategory || !TRACKED_CATEGORIES.includes(p.dashCategory)) return;
       if (!byCh[p.chain]) byCh[p.chain] = { tvl: 0, wa: 0 };
       byCh[p.chain].tvl += p.tvlUsd;
       byCh[p.chain].wa += p.apy * p.tvlUsd;
       chPools[p.chain] = (chPools[p.chain] || 0) + 1;
     });
-    const topChains = Object.entries(byCh)
+    // Select chains that qualify for the heatmap (tracked categories, min pools, min TVL)
+    // then show top 8 by APY
+    const qualifiedChains = Object.entries(byCh)
       .map(([name, d]) => ({ name, tvl: d.tvl, apy: d.wa / d.tvl }))
-      .filter((c) => (chPools[c.name] || 0) >= CHAIN_MIN_POOLS)
+      .filter((c) => (chPools[c.name] || 0) >= CHAIN_MIN_POOLS && c.tvl >= 10_000_000)
+      .sort((a, b) => b.tvl - a.tvl)
+      .slice(0, 15); // same top-15 pool as heatmap
+    const topChains = [...qualifiedChains]
       .sort((a, b) => b.apy - a.apy)
-      .slice(0, 7);
+      .slice(0, 8);
 
     const totalTvl = assetPools.reduce((s, p) => s + p.tvlUsd, 0);
     return { totalTvl, poolCount: assetPools.length, topProtocols, topChains };
@@ -296,7 +303,10 @@ export function useDeFiData(selectedAsset) {
       .sort((a, b) => b.tvl - a.tvl)
       .slice(0, 12);
 
-    return { protocols };
+    // Find actual highest lending rate protocol (for the "Top Lending Rate" card)
+    const topByRate = [...protocols].sort((a, b) => b.supplyApy - a.supplyApy)[0] || null;
+
+    return { protocols, topByRate };
   }, [assetPools]);
 
   // Top yields by APY for selected asset
