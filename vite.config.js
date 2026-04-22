@@ -309,6 +309,62 @@ export default defineConfig(({ mode }) => {
         },
       },
       {
+        name: "wbtc-proxy",
+        configureServer(server) {
+          server.middlewares.use("/api/wbtc", async (req, res) => {
+            try {
+              const wbtcHandler = await import("./api/wbtc.js");
+              const fakeRes = {
+                statusCode: 200,
+                headers: {},
+                setHeader(k, v) { this.headers[k] = v; },
+                status(code) { this.statusCode = code; return this; },
+                json(data) {
+                  res.statusCode = this.statusCode;
+                  Object.entries(this.headers).forEach(([k, v]) => res.setHeader(k, v));
+                  res.setHeader("Content-Type", "application/json");
+                  res.end(JSON.stringify(data));
+                },
+              };
+              await wbtcHandler.default(req, fakeRes);
+            } catch (err) {
+              console.error("WBTC proxy error:", err);
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+        },
+      },
+      {
+        name: "wbtc-pools-proxy",
+        configureServer(server) {
+          server.middlewares.use("/api/wbtc-pools", async (req, res) => {
+            try {
+              const handler = await import("./api/wbtc-pools.js");
+              const fakeRes = {
+                statusCode: 200,
+                headers: {},
+                setHeader(k, v) { this.headers[k] = v; },
+                status(code) { this.statusCode = code; return this; },
+                json(data) {
+                  res.statusCode = this.statusCode;
+                  Object.entries(this.headers).forEach(([k, v]) => res.setHeader(k, v));
+                  res.setHeader("Content-Type", "application/json");
+                  res.end(JSON.stringify(data));
+                },
+              };
+              await handler.default(req, fakeRes);
+            } catch (err) {
+              console.error("WBTC pools proxy error:", err);
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+        },
+      },
+      {
         name: "sparklend-proxy",
         configureServer(server) {
           server.middlewares.use("/api/sparklend", async (req, res) => {

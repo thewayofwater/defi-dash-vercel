@@ -141,6 +141,7 @@ export default function NavBar() {
         {navLink("/pendle", "Pendle", "⊿")}
         {navLink("/maple", "Maple", "❋")}
         {navLink("/hyperliquid", "Hyperliquid", "◆")}
+        {navLink("/wbtc", "WBTC", "₿")}
 
         {sectionLabel("Governance")}
         {navLink("/governance", "Performance", "⚖")}
