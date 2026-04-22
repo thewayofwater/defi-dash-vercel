@@ -857,10 +857,10 @@ function BtcDerivativePoolHealth({ pools, summary }) {
               <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.04)" }} />
               <div>
                 <div style={{ fontSize: 10, color: "#6b7a8d", fontFamily: mono, letterSpacing: 1, textTransform: "uppercase" }}>Most Imbalanced</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: RISK_COLOR[summary.mostImbalanced.risk], fontFamily: mono, marginTop: 2 }}>
-                  {summary.mostImbalanced.label}
-                  <span style={{ fontSize: 10, color: RISK_COLOR[summary.mostImbalanced.risk], fontWeight: 500, marginLeft: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    · {summary.mostImbalanced.wbtcShare.toFixed(0)}% WBTC
+                <div style={{ fontSize: 18, fontWeight: 700, color: RISK_COLOR[summary.mostImbalanced.risk], fontFamily: mono, marginTop: 2 }}>
+                  {summary.mostImbalanced.label.replace(/\s*\([^)]*\)\s*/g, "")}
+                  <span style={{ fontSize: 10, color: RISK_COLOR[summary.mostImbalanced.risk], fontWeight: 500, marginLeft: 6, letterSpacing: 0.5 }}>
+                    {summary.mostImbalanced.wbtcShare.toFixed(0)}% WBTC
                   </span>
                 </div>
               </div>
