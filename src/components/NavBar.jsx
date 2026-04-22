@@ -143,9 +143,6 @@ export default function NavBar() {
         {navLink("/hyperliquid", "Hyperliquid", "◆")}
         {navLink("/wbtc", "WBTC", "₿")}
 
-        {sectionLabel("Governance")}
-        {navLink("/governance", "Performance", "⚖")}
-
         {sectionLabel("Tools")}
         {navLink("/compare", "Compare", "⇄")}
         {navLink("/portfolio", "Portfolio", "◎")}
