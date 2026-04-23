@@ -290,7 +290,10 @@ export default async function handler(req, res) {
     const wbtcSupply = wbtcNetworkData.summary?.supply ? parseInt(wbtcNetworkData.summary.supply) / 1e8 : null;
     const wbtcHoldings = wbtcNetworkData.summary?.holdings ? parseInt(wbtcNetworkData.summary.holdings) / 1e8 : null;
 
-    // Separate BTC custodian addresses from chain contracts
+    // Separate BTC custodian addresses from chain contracts. Balances come
+    // from wbtc.network's reported values for dashboard speed; on-chain
+    // verification of these balances is available via scripts/verify-reserves.js
+    // (can be run manually or on a weekly/monthly cron).
     const btcAddresses = wbtcNetworkData.addresses.filter((a) => a.chain === "btc");
     const totalBtcReserves = btcAddresses.reduce((s, a) => s + (parseInt(a.balance || 0) / 1e8), 0);
 

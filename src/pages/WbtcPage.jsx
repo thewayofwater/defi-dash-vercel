@@ -252,7 +252,7 @@ function CustodianTable({ addresses }) {
                   onMouseEnter={(e) => url && (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
                   onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.008)"}
                 >
-                  <td style={{ ...TD, color: "#cbd5e1" }}>{shortAddr(a.address)}</td>
+                  <td style={{ ...TD, color: "#cbd5e1", wordBreak: "break-all" }}>{a.address}</td>
                   <td style={TD_DIM}>{a.type}</td>
                   <td style={{ ...TD_NUM, color: isZero ? "#4a5568" : ACCENT }}>{(a.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
                 </tr>
