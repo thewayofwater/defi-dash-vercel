@@ -337,6 +337,36 @@ export default defineConfig(({ mode }) => {
         },
       },
       {
+        name: "wbtc-peg-proxy",
+        configureServer(server) {
+          server.middlewares.use("/api/wbtc-peg", async (req, res) => {
+            try {
+              const handler = await import("./api/wbtc-peg.js");
+              const url = new URL(req.url, "http://localhost");
+              const query = Object.fromEntries(url.searchParams);
+              const fakeRes = {
+                statusCode: 200,
+                headers: {},
+                setHeader(k, v) { this.headers[k] = v; },
+                status(code) { this.statusCode = code; return this; },
+                json(data) {
+                  res.statusCode = this.statusCode;
+                  Object.entries(this.headers).forEach(([k, v]) => res.setHeader(k, v));
+                  res.setHeader("Content-Type", "application/json");
+                  res.end(JSON.stringify(data));
+                },
+              };
+              await handler.default({ ...req, query }, fakeRes);
+            } catch (err) {
+              console.error("WBTC peg proxy error:", err);
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+        },
+      },
+      {
         name: "wbtc-pools-proxy",
         configureServer(server) {
           server.middlewares.use("/api/wbtc-pools", async (req, res) => {

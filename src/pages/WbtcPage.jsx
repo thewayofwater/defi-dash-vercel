@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from "react";
 import {
-  BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, AreaChart, Area, ComposedChart, Line, ReferenceLine,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import { useWbtcData } from "../hooks/useWbtcData";
 import { useWbtcPoolsData } from "../hooks/useWbtcPoolsData";
+import { useWbtcPegData } from "../hooks/useWbtcPegData";
 import { fmt, fmtPct } from "../utils/format";
 import { SectionHeader, LoadingSpinner, ModuleCard, ChartShimmer } from "../components/Shared";
 
@@ -880,6 +882,299 @@ function BtcDerivativePoolHealth({ pools, summary }) {
   );
 }
 
+// ─── WBTC / cbBTC Peg Chart ───
+
+function PegTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0]?.payload;
+  if (!d) return null;
+  const date = new Date(d.date * 1000);
+  const dateStr = date.toISOString().slice(0, 10);
+  const drift = d.drift_bps;
+  const worst = d.worstIntraday_bps;
+  const driftColor = Math.abs(drift) < 15 ? "#4ade80" : Math.abs(drift) < 50 ? "#fbbf24" : "#f87171";
+  return (
+    <div style={{ background: "#131926", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 5, padding: "10px 12px", fontSize: 11, fontFamily: mono, color: "#e2e8f0", minWidth: 220 }}>
+      <div style={{ color: "#6b7a8d", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>{dateStr}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "4px 14px", fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ color: "#94a3b8" }}>Close</span>
+        <span style={{ textAlign: "right", color: "#e2e8f0" }}>{d.close.toFixed(6)}</span>
+        <span style={{ color: "#94a3b8" }}>High</span>
+        <span style={{ textAlign: "right", color: "#94a3b8" }}>{d.high.toFixed(6)}</span>
+        <span style={{ color: "#94a3b8" }}>Low</span>
+        <span style={{ textAlign: "right", color: "#94a3b8" }}>{d.low.toFixed(6)}</span>
+        <span style={{ color: "#94a3b8" }}>Drift (close)</span>
+        <span style={{ textAlign: "right", color: driftColor, fontWeight: 600 }}>
+          {drift > 0 ? "+" : ""}{drift.toFixed(1)} bps
+        </span>
+        <span style={{ color: "#94a3b8" }}>Intraday worst</span>
+        <span style={{ textAlign: "right", color: "#94a3b8" }}>
+          {worst > 0 ? "+" : ""}{worst.toFixed(1)} bps
+        </span>
+        {Number.isFinite(d.volumeUsd) && d.volumeUsd > 0 && (
+          <>
+            <span style={{ color: "#94a3b8" }}>Volume</span>
+            <span style={{ textAlign: "right", color: "#94a3b8" }}>{fmtUsd(d.volumeUsd)}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PegChart({ history, summary, pools }) {
+  if (!history || history.length === 0) {
+    return (
+      <div style={{ padding: "30px 0", color: "#6b7a8d", fontSize: 12, fontFamily: mono, textAlign: "center" }}>
+        No peg data available.
+      </div>
+    );
+  }
+
+  // Transform for Recharts: each datum gets a `range: [low, high]` for the range bar
+  const data = history.map((h) => ({
+    ...h,
+    range: [h.low, h.high],
+  }));
+
+  // Compute y-axis bounds with a small padding so bars don't hit the edge
+  const allLows = history.map((h) => h.low);
+  const allHighs = history.map((h) => h.high);
+  const dataMin = Math.min(...allLows);
+  const dataMax = Math.max(...allHighs);
+  // Ensure peg (1.0) is always visible in the axis range
+  const yLo = Math.min(dataMin, 1) - 0.0005;
+  const yHi = Math.max(dataMax, 1) + 0.0005;
+
+  const driftColor = summary?.latestDriftBps == null ? "#6b7a8d"
+    : Math.abs(summary.latestDriftBps) < 15 ? "#4ade80"
+    : Math.abs(summary.latestDriftBps) < 50 ? "#fbbf24" : "#f87171";
+
+  const formatDate = (ts) => {
+    const dt = new Date(ts * 1000);
+    return dt.toISOString().slice(5, 10); // "MM-DD"
+  };
+
+  return (
+    <div>
+      {/* Summary strip */}
+      {summary && (() => {
+        // Find the days matching the window extremes so we can show them in tooltips.
+        const minDriftDay = history.reduce((best, h) => (best == null || h.drift_bps < best.drift_bps) ? h : best, null);
+        const maxDriftDay = history.reduce((best, h) => (best == null || h.drift_bps > best.drift_bps) ? h : best, null);
+        const worstIntradayDay = history.reduce((best, h) => (best == null || h.worstIntraday_bps < best.worstIntraday_bps) ? h : best, null);
+        const fmtDay = (ts) => ts ? new Date(ts * 1000).toISOString().slice(0, 10) : "";
+        return (
+          <div style={{ display: "flex", gap: 26, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 6, marginBottom: 14 }}>
+            <StatWithTooltip
+              label="Latest Rate"
+              primary={summary.latestRate.toFixed(6)}
+              suffix={`${summary.latestDriftBps > 0 ? "+" : ""}${summary.latestDriftBps.toFixed(1)} bps`}
+              suffixColor={driftColor}
+              tooltipRows={[
+                ["Date", fmtDay(summary.latestDate)],
+                ["Close", summary.latestRate.toFixed(6)],
+                ["Drift", `${summary.latestDriftBps > 0 ? "+" : ""}${summary.latestDriftBps.toFixed(1)} bps`],
+              ]}
+            />
+            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.04)" }} />
+            <StatWithTooltip
+              label="Window Low"
+              primary={`${summary.minDriftBps.toFixed(1)} bps`}
+              primaryColor="#f87171"
+              tooltipRows={minDriftDay ? [
+                ["Date", fmtDay(minDriftDay.date)],
+                ["Close", minDriftDay.close.toFixed(6)],
+                ["Drift", `${minDriftDay.drift_bps.toFixed(1)} bps`],
+              ] : []}
+            />
+            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.04)" }} />
+            <StatWithTooltip
+              label="Window High"
+              primary={`${summary.maxDriftBps > 0 ? "+" : ""}${summary.maxDriftBps.toFixed(1)} bps`}
+              primaryColor="#4ade80"
+              tooltipRows={maxDriftDay ? [
+                ["Date", fmtDay(maxDriftDay.date)],
+                ["Close", maxDriftDay.close.toFixed(6)],
+                ["Drift", `${maxDriftDay.drift_bps > 0 ? "+" : ""}${maxDriftDay.drift_bps.toFixed(1)} bps`],
+              ] : []}
+            />
+            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.04)" }} />
+            <StatWithTooltip
+              label="Worst Intraday"
+              primary={`${summary.minIntradayBps.toFixed(1)} bps`}
+              primaryColor="#f87171"
+              tooltipRows={worstIntradayDay ? [
+                ["Date", fmtDay(worstIntradayDay.date)],
+                ["Intraday low", worstIntradayDay.low.toFixed(6)],
+                ["That day's close", worstIntradayDay.close.toFixed(6)],
+                ["Recovered by", `${(worstIntradayDay.drift_bps - worstIntradayDay.worstIntraday_bps).toFixed(1)} bps`],
+              ] : []}
+            />
+            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.04)" }} />
+            <TrackedTvlStat summary={summary} pools={pools} />
+          </div>
+        );
+      })()}
+
+      {/* Chart */}
+      <ResponsiveContainer width="100%" height={340}>
+        <ComposedChart data={data} margin={{ top: 10, right: 12, left: 12, bottom: 10 }}>
+          <XAxis
+            dataKey="date"
+            tickFormatter={formatDate}
+            stroke="#4a5568"
+            tick={{ fill: "#94a3b8", fontSize: 10, fontFamily: mono }}
+            tickLine={false}
+            axisLine={{ stroke: "rgba(255,255,255,0.06)" }}
+            minTickGap={40}
+          />
+          <YAxis
+            domain={[yLo, yHi]}
+            tickFormatter={(v) => v.toFixed(4)}
+            stroke="#4a5568"
+            tick={{ fill: "#94a3b8", fontSize: 10, fontFamily: mono }}
+            tickLine={false}
+            axisLine={{ stroke: "rgba(255,255,255,0.06)" }}
+            width={62}
+          />
+          <Tooltip
+            content={<PegTooltip />}
+            cursor={{ stroke: "rgba(255,255,255,0.08)", strokeWidth: 1 }}
+          />
+          <ReferenceLine
+            y={1}
+            stroke="rgba(148,163,184,0.5)"
+            strokeDasharray="4 4"
+            label={{ value: "Peg 1.0000", fill: "#94a3b8", fontSize: 9, fontFamily: mono, position: "insideTopRight" }}
+          />
+          <Bar
+            dataKey="range"
+            fill={ACCENT}
+            fillOpacity={0.22}
+            isAnimationActive={false}
+            barSize={6}
+          />
+          <Line
+            type="monotone"
+            dataKey="close"
+            stroke={ACCENT}
+            strokeWidth={1.6}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+
+    </div>
+  );
+}
+
+function StatWithTooltip({ label, primary, primaryColor = "#e2e8f0", suffix, suffixColor, tooltipRows = [] }) {
+  const [hover, setHover] = useState(false);
+  const hasTooltip = tooltipRows.length > 0;
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ position: "relative", cursor: hasTooltip ? "help" : "default" }}
+    >
+      <div style={{ fontSize: 10, color: "#6b7a8d", fontFamily: mono, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: primaryColor, fontFamily: mono, marginTop: 2 }}>
+        <span style={hasTooltip ? { borderBottom: "1px dotted rgba(148,163,184,0.4)" } : {}}>
+          {primary}
+        </span>
+        {suffix && (
+          <span style={{ fontSize: 10, color: suffixColor || primaryColor, fontWeight: 500, marginLeft: 6, letterSpacing: 0.5 }}>
+            {suffix}
+          </span>
+        )}
+      </div>
+      {hasTooltip && hover && (
+        <div style={{
+          position: "absolute",
+          top: "calc(100% + 8px)",
+          left: 0,
+          background: "#131926",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 6,
+          padding: "10px 12px",
+          zIndex: 30,
+          minWidth: 200,
+          boxShadow: "0 6px 18px rgba(0,0,0,0.5)",
+          fontSize: 10,
+          fontFamily: mono,
+          color: "#94a3b8",
+          whiteSpace: "nowrap",
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "4px 14px", fontVariantNumeric: "tabular-nums" }}>
+            {tooltipRows.map(([k, v]) => (
+              <React.Fragment key={k}>
+                <span style={{ color: "#6b7a8d" }}>{k}</span>
+                <span style={{ textAlign: "right", color: "#e2e8f0" }}>{v}</span>
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrackedTvlStat({ summary, pools }) {
+  const [hover, setHover] = useState(false);
+  const totalTvl = (pools || []).reduce((s, p) => s + (p.tvl || 0), 0);
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ position: "relative", cursor: "help" }}
+    >
+      <div style={{ fontSize: 10, color: "#6b7a8d", fontFamily: mono, letterSpacing: 1, textTransform: "uppercase" }}>Tracked TVL</div>
+      <div style={{
+        fontSize: 18, fontWeight: 700, color: "#e2e8f0", fontFamily: mono, marginTop: 2,
+        borderBottom: "1px dotted rgba(148,163,184,0.4)",
+        display: "inline-block",
+      }}>
+        {fmtUsd(summary.totalTvl)}
+      </div>
+      {hover && pools && pools.length > 0 && (
+        <div style={{
+          position: "absolute",
+          top: "calc(100% + 8px)",
+          left: 0,
+          background: "#131926",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 6,
+          padding: "10px 12px",
+          zIndex: 30,
+          minWidth: 260,
+          boxShadow: "0 6px 18px rgba(0,0,0,0.5)",
+          fontSize: 10,
+          fontFamily: mono,
+          color: "#94a3b8",
+        }}>
+          <div style={{ textTransform: "uppercase", letterSpacing: 1, color: "#6b7a8d", marginBottom: 8 }}>TVL Weights</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[...pools].sort((a, b) => (b.tvl || 0) - (a.tvl || 0)).map((p) => {
+              const weight = totalTvl > 0 ? ((p.tvl || 0) / totalTvl) * 100 : 0;
+              return (
+                <div key={p.id} style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+                  <span style={{ color: "#e2e8f0" }}>{p.label}</span>
+                  <span>
+                    <span style={{ color: "#94a3b8" }}>{fmtUsd(p.tvl)}</span>
+                    <span style={{ color: "#6b7a8d", marginLeft: 6 }}>{weight.toFixed(0)}%</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TIMEFRAMES = [
   { key: 30, label: "30D" },
   { key: 90, label: "90D" },
@@ -893,6 +1188,7 @@ export default function WbtcPage() {
   const feedEvents = recentEvents || [];
   const [period, setPeriod] = useState(30);
   const periodLabel = TIMEFRAMES.find((t) => t.key === period)?.label || "";
+  const { pools: pegPools, history: pegHistory, summary: pegSummary, loading: pegLoading, refreshing: pegRefreshing, refreshKey: pegRefreshKey, refresh: refreshPeg } = useWbtcPegData(period);
 
   if (error) {
     return (
@@ -942,17 +1238,17 @@ export default function WbtcPage() {
             </div>
           </div>
           <button
-            onClick={() => { refresh(); refreshPools(); }}
-            disabled={refreshing || poolsRefreshing}
+            onClick={() => { refresh(); refreshPools(); refreshPeg(); }}
+            disabled={refreshing || poolsRefreshing || pegRefreshing}
             style={{
-              background: (refreshing || poolsRefreshing) ? "rgba(247,147,26,0.15)" : "rgba(255,255,255,0.04)",
+              background: (refreshing || poolsRefreshing || pegRefreshing) ? "rgba(247,147,26,0.15)" : "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.08)",
               borderRadius: 6,
               padding: "7px 14px",
               fontSize: 11,
               fontFamily: mono,
-              color: (refreshing || poolsRefreshing) ? ACCENT : "#94a3b8",
-              cursor: (refreshing || poolsRefreshing) ? "default" : "pointer",
+              color: (refreshing || poolsRefreshing || pegRefreshing) ? ACCENT : "#94a3b8",
+              cursor: (refreshing || poolsRefreshing || pegRefreshing) ? "default" : "pointer",
               display: "flex",
               alignItems: "center",
               gap: 6,
@@ -1031,6 +1327,13 @@ export default function WbtcPage() {
           <SectionHeader title="WBTC Supply by Chain" subtitle="Native omnichain supply on each chain (OFT standard)" />
           {refreshing ? <ChartShimmer height={280} /> : (
             <div key={refreshKey}><SupplyByChainChart chainSupplies={chainSupplies} /></div>
+          )}
+        </ModuleCard>
+
+        <ModuleCard>
+          <SectionHeader title="WBTC / cbBTC Peg" subtitle="TVL-weighted rate across major pools" />
+          {(pegRefreshing || pegLoading) ? <ChartShimmer height={340} /> : (
+            <div key={pegRefreshKey}><PegChart history={pegHistory} summary={pegSummary} pools={pegPools} /></div>
           )}
         </ModuleCard>
 
