@@ -39,11 +39,153 @@ const KNOWN_TOKENS = {
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; DeFiDash/1.0)" };
 
+// ─── Curve on-chain fallback ───
+// Used when prices.curve.finance is down or degraded. Reads pool composition
+// directly from chain: coins(i) to discover token addresses, balanceOf(pool)
+// for reserves, price_oracle() / price_oracle(uint256) for implied ratio.
+
+const CURVE_SEL = {
+  coins_i: "0xc6610657",             // coins(uint256)
+  price_oracle_0: "0x86fc88d3",      // price_oracle() — 2-asset stableswap-ng
+  price_oracle_i: "0xe2e7d264",      // price_oracle(uint256) — multi-asset stableswap-ng
+};
+
+async function discoverCurveCoins(poolAddr) {
+  const coins = [];
+  for (let i = 0; i < 4; i++) {
+    const idxHex = i.toString(16).padStart(64, "0");
+    try {
+      const raw = await ethCall(poolAddr, CURVE_SEL.coins_i + idxHex);
+      if (!raw || raw === "0x" || BigInt(raw) === 0n) break;
+      coins.push("0x" + raw.slice(-40).toLowerCase());
+    } catch {
+      break;
+    }
+  }
+  return coins;
+}
+
+async function fetchCurvePoolOnChain(poolAddr) {
+  const coinAddrs = await discoverCurveCoins(poolAddr);
+  if (coinAddrs.length < 2) throw new Error("onchain: could not discover coins");
+  const pad = poolAddr.slice(2).toLowerCase().padStart(64, "0");
+  // Read balanceOf(pool) for each coin, plus try both price_oracle signatures in parallel.
+  const balancePromises = coinAddrs.map((a) => ethCall(a, SEL.balanceOf + pad));
+  const po2Promise = ethCall(poolAddr, CURVE_SEL.price_oracle_0).catch(() => null);
+  const poNPromises = coinAddrs.slice(1).map((_, i) =>
+    ethCall(poolAddr, CURVE_SEL.price_oracle_i + i.toString(16).padStart(64, "0")).catch(() => null)
+  );
+  const [balancesRaw, po2, ...poNs] = await Promise.all([
+    Promise.all(balancePromises),
+    po2Promise,
+    ...poNPromises,
+  ]);
+
+  // Resolve price_oracle into an array matching priceInCoin0[] convention:
+  // [1, <price of coin1 in coin0>, <price of coin2 in coin0>, ...]
+  // Sanity check: for BTC-derivative pools, each ratio should be near 1.0.
+  // Some pool variants return garbage (e.g. 854 wei or 0) from price_oracle(i);
+  // treat anything outside [0.5, 2.0] as invalid and drop the whole array so
+  // the UI shows no implied ratio rather than a bogus one.
+  const parsePo = (raw) => {
+    if (!raw || raw === "0x") return null;
+    const v = Number(BigInt(raw)) / 1e18;
+    return v >= 0.5 && v <= 2.0 ? v : null;
+  };
+  let priceInCoin0 = null;
+  if (coinAddrs.length === 2) {
+    const v = parsePo(po2);
+    if (v != null) priceInCoin0 = [1, v];
+  } else {
+    const vals = poNs.map(parsePo);
+    if (vals.every((v) => v != null)) priceInCoin0 = [1, ...vals];
+  }
+
+  return { coinAddrs, balancesRaw, priceInCoin0 };
+}
+
+async function resolveTokenMeta(addr) {
+  const lower = addr.toLowerCase();
+  if (KNOWN_TOKENS[lower]) return { address: addr, ...KNOWN_TOKENS[lower] };
+  const [symRaw, decRaw] = await Promise.all([
+    ethCall(addr, "0x95d89b41").catch(() => null),
+    ethCall(addr, "0x313ce567").catch(() => null),
+  ]);
+  const decimals = decRaw ? parseInt(decRaw, 16) : 18;
+  let symbol = `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  if (symRaw && symRaw.length > 130) {
+    try {
+      const len = parseInt(symRaw.slice(66, 130), 16);
+      const dataHex = symRaw.slice(130, 130 + len * 2);
+      symbol = Buffer.from(dataHex, "hex").toString("utf8").replace(/\0/g, "");
+    } catch {}
+  }
+  return { address: addr, symbol, decimals };
+}
+
+function computeCurveMetricsFromOnChain(raw, meta, tokenMetas, prices) {
+  const { coinAddrs, balancesRaw, priceInCoin0 } = raw;
+  const composition = coinAddrs.map((addr, i) => {
+    const tm = tokenMetas[i];
+    const bal = Number(BigInt(balancesRaw[i])) / 10 ** tm.decimals;
+    const px = prices[addr.toLowerCase()] || 0;
+    return {
+      symbol: tm.symbol,
+      address: addr,
+      balance: bal,
+      balanceUsd: bal * px,
+      share: 0, // fill below
+    };
+  });
+  const totalUsd = composition.reduce((s, c) => s + c.balanceUsd, 0);
+  if (totalUsd <= 0) return null;
+  composition.forEach((c) => { c.share = (c.balanceUsd / totalUsd) * 100; });
+
+  const wbtcIdx = composition.findIndex((c) => c.symbol.toUpperCase() === "WBTC");
+  if (wbtcIdx === -1) return null;
+
+  // Implied ratios: "1 WBTC = X coin_i". Same formula as the API path uses.
+  let impliedRatios = [];
+  if (priceInCoin0) {
+    const wbtcPriceInCoin0 = priceInCoin0[wbtcIdx] || 1;
+    impliedRatios = composition.map((c, i) => {
+      if (i === wbtcIdx) return null;
+      const cp = priceInCoin0[i];
+      if (!cp || cp <= 0) return null;
+      return { symbol: c.symbol, ratio: wbtcPriceInCoin0 / cp };
+    }).filter(Boolean);
+  }
+
+  return {
+    address: meta.address,
+    label: meta.label,
+    venue: meta.venue,
+    url: meta.url,
+    tvlUsd: totalUsd,
+    nCoins: composition.length,
+    composition,
+    wbtcShare: composition[wbtcIdx].share,
+    impliedRatios,
+    name: meta.label,
+  };
+}
+
 async function fetchCurvePool(address) {
-  const url = `https://prices.curve.fi/v1/pools/ethereum/${address}`;
-  const resp = await fetch(url, { headers: UA, signal: AbortSignal.timeout(10000) });
-  if (!resp.ok) throw new Error(`Curve ${resp.status}`);
-  return resp.json();
+  // Curve migrated their price API from prices.curve.fi → prices.curve.finance.
+  // New host is intermittently slow (seen 37s response) and 502s under parallel
+  // load — retry once on failure with a small backoff to survive transient issues.
+  const url = `https://prices.curve.finance/v1/pools/ethereum/${address}`;
+  const attempt = async () => {
+    const resp = await fetch(url, { headers: UA, signal: AbortSignal.timeout(25000) });
+    if (!resp.ok) throw new Error(`Curve ${resp.status}`);
+    return resp.json();
+  };
+  try {
+    return await attempt();
+  } catch (err) {
+    await new Promise((r) => setTimeout(r, 500 + Math.random() * 500));
+    return attempt();
+  }
 }
 
 function computeCurveMetrics(raw, meta) {
@@ -282,15 +424,25 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=60");
 
   try {
-    // Fetch Curve pools in parallel
-    const curveResults = await Promise.all(
+    // Fetch Curve pools in parallel. For each, attempt the Curve API first;
+    // on failure, fall back to on-chain reads (composition + price_oracle).
+    // The on-chain branch has no USD prices yet — those come from DeFiLlama
+    // in the shared batch below, so we collect the raw results and compute
+    // metrics after prices arrive.
+    const curveRaw = await Promise.all(
       CURVE_POOLS.map(async (meta) => {
         try {
           const raw = await fetchCurvePool(meta.address);
-          return computeCurveMetrics(raw, meta);
-        } catch (err) {
-          console.error(`Curve ${meta.label}:`, err.message);
-          return { ...meta, error: err.message };
+          return { meta, mode: "api", raw };
+        } catch (apiErr) {
+          try {
+            const raw = await fetchCurvePoolOnChain(meta.address);
+            const tokenMetas = await Promise.all(raw.coinAddrs.map(resolveTokenMeta));
+            return { meta, mode: "onchain", raw, tokenMetas };
+          } catch (chainErr) {
+            console.error(`Curve ${meta.label}: api=${apiErr.message} onchain=${chainErr.message}`);
+            return { meta, mode: "error", error: `${apiErr.message} / ${chainErr.message}` };
+          }
         }
       })
     );
@@ -308,12 +460,18 @@ export default async function handler(req, res) {
       })
     );
 
-    // Collect all token addresses we need prices for
+    // Collect all token addresses needing USD prices: V3 pool tokens + any
+    // Curve fallback pool tokens (API-mode Curve pools already have USD values).
     const tokenAddrs = new Set();
     for (const { raw } of v3Raw) {
       if (raw) {
         tokenAddrs.add(raw.meta0.address.toLowerCase());
         tokenAddrs.add(raw.meta1.address.toLowerCase());
+      }
+    }
+    for (const entry of curveRaw) {
+      if (entry.mode === "onchain") {
+        for (const a of entry.raw.coinAddrs) tokenAddrs.add(a.toLowerCase());
       }
     }
     const prices = await fetchUsdPrices([...tokenAddrs]);
@@ -325,6 +483,17 @@ export default async function handler(req, res) {
       } catch (err) {
         return { ...meta, error: err.message };
       }
+    });
+
+    const curveResults = curveRaw.map((entry) => {
+      if (entry.mode === "error") return { ...entry.meta, error: entry.error };
+      if (entry.mode === "api") {
+        try { return computeCurveMetrics(entry.raw, entry.meta); }
+        catch (err) { return { ...entry.meta, error: err.message }; }
+      }
+      // onchain
+      try { return computeCurveMetricsFromOnChain(entry.raw, entry.meta, entry.tokenMetas, prices); }
+      catch (err) { return { ...entry.meta, error: err.message }; }
     });
 
     // Combine and classify
